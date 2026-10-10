@@ -64,10 +64,19 @@ public class DeckView : MonoBehaviour
 		if (SelectionIsSet ()) {
 			score++;
 			ShowMessage ("Set gevonden!");
+			int[] found = new int[SetSize];
+			for (int c = 0; c < SetSize; c++) {
+				found [c] = System.Array.IndexOf (slots, selectedCards [c]);
+			}
+			ClearSelection ();
+			foreach (int slot in found) {
+				DrawCard (slot);
+			}
+			EnsureSetOnBoard ();
 		} else {
 			ShowMessage ("Geen set");
+			ClearSelection ();
 		}
-		ClearSelection ();
 	}
 
 	void ClearSelection ()
@@ -126,10 +135,54 @@ public class DeckView : MonoBehaviour
 	void Start ()
 	{
 		deck = GetComponent<DeckModel> ();
-		ShowCards ();
+		StartGame ();
+	}
 
-		numberofSets = NumberOfSets(shownCardDimension);
-			
+	const int BoardSize = 36; //cards on the table
+	List<int> deckOrder; //shuffled order of all cards
+	int nextCard; //position in deckOrder of the next card to draw
+	CardModel[] slots = new CardModel[BoardSize];
+	bool[] slotActive = new bool[BoardSize];
+
+	void StartGame ()
+	{
+		deck.Shuffle ();
+		deckOrder = new List<int> (deck.GetCards ());
+		ShowCards ();
+		nextCard = BoardSize;
+		EnsureSetOnBoard ();
+	}
+
+	//put a card from the deck in a slot; hides the slot when the deck is empty
+	void DrawCard (int slot)
+	{
+		CardModel model = slots [slot];
+		if (nextCard >= deckOrder.Count) {
+			slotActive [slot] = false;
+			model.gameObject.SetActive (false);
+			return;
+		}
+		int index = deckOrder [nextCard++];
+		model.cardIndex = index;
+		model.ToggleFace (true);
+		int[] dimensions = IndexToDimension (index);
+		for (int j = 0; j < 5; j++) {
+			shownCardDimension [j, slot] = dimensions [j];
+		}
+		shownCardIndex [slot] = index;
+	}
+
+	//count the sets on the table; while there is none, swap random cards for new ones
+	void EnsureSetOnBoard ()
+	{
+		numberofSets = NumberOfSets (shownCardDimension);
+		while (numberofSets == 0 && nextCard < deckOrder.Count) {
+			int slot = Random.Range (0, BoardSize);
+			if (slotActive [slot]) {
+				DrawCard (slot);
+				numberofSets = NumberOfSets (shownCardDimension);
+			}
+		}
 	}
 
 	//List<int> foundSets = new List<int>();
@@ -202,12 +255,15 @@ public class DeckView : MonoBehaviour
 
 		//shuffle through all carts
 		for (int k1 = 0; k1 < 36; k1++) {
+			if (!slotActive [k1]) continue;
 			for (int k2 = k1 + 1; k2 < 36; k2++) {
+				if (!slotActive [k2]) continue;
 
 				//exclude same card
 				//if (k2 != k1) {
 
 				for (int k3 = k2 + 1; k3 < 36; k3++) {
+					if (!slotActive [k3]) continue;
 
 					if (//k3 != k2 && k3 != k1 && //exclude same card
 						IsSet (array [0, k1], array [0, k2], array [0, k3]) && //check color
@@ -221,6 +277,7 @@ public class DeckView : MonoBehaviour
 						//Debug.Log ("k3 = " + k3);
 
 						for (int k4 = k3 + 1; k4 < 36; k4++) {
+							if (!slotActive [k4]) continue;
 
 							// found a set
 							if (//k4 != k1 && k4 != k2 && k4 != k3 && 
@@ -243,7 +300,7 @@ public class DeckView : MonoBehaviour
 								set1 [2] = DimensionToIndex (card3);
 								set1 [3] = DimensionToIndex (card4);
 
-								Debug.Log ("cards are = " + set1 [0] + " " + set1 [1] + " " + set1 [2] + " " + set1 [3]);
+								//Debug.Log ("cards are = " + set1 [0] + " " + set1 [1] + " " + set1 [2] + " " + set1 [3]);
 
 								numberofSets++;
 								Numberofsets.numberofSets++;
@@ -308,6 +365,8 @@ public class DeckView : MonoBehaviour
 				cardModel.cardIndex = i;
 				cardModel.deckView = this;
 				cardModel.ToggleFace (true);
+				slots [cardCount] = cardModel;
+				slotActive [cardCount] = true;
 
 
 
