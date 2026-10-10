@@ -4,4 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Card Deck Test.unity
+    guid: 415869d2fe5a6438591a96cc28a0ec94
+  m_configObjects: {}
