@@ -28,6 +28,9 @@ public class DeckView : MonoBehaviour
 	//select or deselect a clicked card; a fifth card is ignored until one is deselected
 	public void ToggleSelection (CardModel card)
 	{
+		if (gameOver) {
+			return;
+		}
 		if (selectedCards.Remove (card)) {
 			card.SetSelected (false);
 		} else if (selectedCards.Count < SetSize) {
@@ -103,6 +106,17 @@ public class DeckView : MonoBehaviour
 		GUI.Label (new Rect (10, 50, 400, 32), "Score: " + score, labelStyle);
 		if (Time.time < messageUntil) {
 			GUI.Label (new Rect (10, 82, 400, 32), message, labelStyle);
+		}
+		if (gameOver) {
+			float w = 320;
+			float h = 160;
+			Rect box = new Rect ((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
+			GUI.Box (box, "");
+			GUI.Label (new Rect (box.x + 20, box.y + 15, w - 40, 32), "Spel afgelopen", labelStyle);
+			GUI.Label (new Rect (box.x + 20, box.y + 50, w - 40, 32), "Score: " + score, labelStyle);
+			if (GUI.Button (new Rect (box.x + 20, box.y + 100, w - 40, 36), "Nieuw spel")) {
+				Restart ();
+			}
 		}
 	}
 
@@ -183,7 +197,10 @@ public class DeckView : MonoBehaviour
 				numberofSets = NumberOfSets (shownCardDimension);
 			}
 		}
+		gameOver = numberofSets == 0; //deck empty and no set left on the table
 	}
+
+	bool gameOver;
 
 	//List<int> foundSets = new List<int>();
 
@@ -411,7 +428,17 @@ public class DeckView : MonoBehaviour
 
 	public void Restart ()
 	{
-		SceneManager.LoadScene ("Card Deck Test");
+		ClearSelection ();
+		foreach (CardModel model in slots) {
+			if (model != null) {
+				Destroy (model.gameObject);
+			}
+		}
+		System.Array.Clear (slotActive, 0, BoardSize);
+		shownCardIndex.Clear ();
+		score = 0;
+		message = "";
+		StartGame ();
 	}
 
 
