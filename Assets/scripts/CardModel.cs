@@ -24,8 +24,11 @@ public class CardModel : MonoBehaviour {
 		}
 	}
 
+	Vector3 baseScale; //scale of the unselected card
+
 	void Awake() {
 		spriteRenderer = GetComponent<SpriteRenderer>(); //angle brackets specify the type
+		baseScale = transform.localScale;
 	}
 
 //
@@ -49,16 +52,21 @@ public class CardModel : MonoBehaviour {
 ////		}
 //	}
 //
-	public void OnMouseClick()
+	public DeckView deckView; //set by DeckView when it creates the card
+	public bool selected { get; private set; }
+
+	public void OnMouseDown()
 	{
-		transform.localScale = new Vector3 (1.05f, 1.05f, 1.0f);
-
-		SpriteRenderer sprite = GetComponent<SpriteRenderer>();
-		if (sprite != null) {
-			sprite.color = highlightColor;
+		if (deckView != null) {
+			deckView.ToggleSelection (this);
 		}
+	}
 
-
+	public void SetSelected(bool value)
+	{
+		selected = value;
+		transform.localScale = value ? baseScale * 1.05f : baseScale;
+		spriteRenderer.color = value ? highlightColor : Color.white;
 	}
 
 

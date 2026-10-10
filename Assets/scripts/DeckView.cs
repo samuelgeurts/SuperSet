@@ -22,6 +22,20 @@ public class DeckView : MonoBehaviour
 	public int numberofSets;
 	public List<int> shownCardIndex = new List<int> ();
 
+	public const int SetSize = 4; //cards needed for one set
+	public List<CardModel> selectedCards = new List<CardModel> ();
+
+	//select or deselect a clicked card; a fifth card is ignored until one is deselected
+	public void ToggleSelection (CardModel card)
+	{
+		if (selectedCards.Remove (card)) {
+			card.SetSelected (false);
+		} else if (selectedCards.Count < SetSize) {
+			selectedCards.Add (card);
+			card.SetSelected (true);
+		}
+	}
+
 
 	//	//function to check if all parameters are the same
 	//	bool AllSame(params int[] list)
@@ -231,6 +245,7 @@ public class DeckView : MonoBehaviour
 
 				CardModel cardModel = cardCopy.GetComponent<CardModel> ();
 				cardModel.cardIndex = i;
+				cardModel.deckView = this;
 				cardModel.ToggleFace (true);
 
 
