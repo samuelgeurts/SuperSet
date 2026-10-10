@@ -33,6 +33,67 @@ public class DeckView : MonoBehaviour
 		} else if (selectedCards.Count < SetSize) {
 			selectedCards.Add (card);
 			card.SetSelected (true);
+			if (selectedCards.Count == SetSize) {
+				CheckSelection ();
+			}
+		}
+	}
+
+	public int score;
+	string message = "";
+	float messageUntil;
+	GUIStyle labelStyle;
+
+	//true if the selected cards form a set: every dimension all the same or all different
+	bool SelectionIsSet ()
+	{
+		int[][] d = new int[SetSize][];
+		for (int c = 0; c < SetSize; c++) {
+			d [c] = IndexToDimension (selectedCards [c].cardIndex);
+		}
+		for (int dim = 0; dim < 5; dim++) {
+			if (!IsSet4 (d [0] [dim], d [1] [dim], d [2] [dim], d [3] [dim])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void CheckSelection ()
+	{
+		if (SelectionIsSet ()) {
+			score++;
+			ShowMessage ("Set gevonden!");
+		} else {
+			ShowMessage ("Geen set");
+		}
+		ClearSelection ();
+	}
+
+	void ClearSelection ()
+	{
+		foreach (CardModel card in selectedCards) {
+			card.SetSelected (false);
+		}
+		selectedCards.Clear ();
+	}
+
+	void ShowMessage (string text)
+	{
+		message = text;
+		messageUntil = Time.time + 1.5f;
+	}
+
+	void OnGUI ()
+	{
+		if (labelStyle == null) {
+			labelStyle = new GUIStyle (GUI.skin.label);
+			labelStyle.fontSize = 22;
+			labelStyle.normal.textColor = Color.white;
+		}
+		GUI.Label (new Rect (10, 50, 400, 32), "Score: " + score, labelStyle);
+		if (Time.time < messageUntil) {
+			GUI.Label (new Rect (10, 82, 400, 32), message, labelStyle);
 		}
 	}
 
