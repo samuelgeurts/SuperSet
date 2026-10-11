@@ -55,7 +55,7 @@ public class DeckView : MonoBehaviour
 	void CheckSelection ()
 	{
 		if (SelectionIsSet ()) {
-			score++;
+			score += PointsPerSet [dimensionCount - 3];
 			ShowMessage ("Set gevonden!");
 			int[] found = new int[SetSize];
 			for (int c = 0; c < SetSize; c++) {
@@ -94,6 +94,11 @@ public class DeckView : MonoBehaviour
 			labelStyle.normal.textColor = Color.white;
 		}
 		GUI.Label (new Rect (10, 50, 400, 32), "Score: " + score, labelStyle);
+		GUI.Label (new Rect (10, 120, 200, 32), "Moeilijkheid", labelStyle);
+		int choice = GUI.Toolbar (new Rect (10, 155, 240, 32), dimensionCount - 3, new string[] { "3", "4", "5" });
+		if (choice + 3 != dimensionCount) {
+			SetDimensions (choice + 3);
+		}
 		if (Time.time < messageUntil) {
 			GUI.Label (new Rect (10, 82, 400, 32), message, labelStyle);
 		}
@@ -113,21 +118,29 @@ public class DeckView : MonoBehaviour
 	void Start ()
 	{
 		deck = GetComponent<DeckModel> ();
+		dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", dimensionCount), 3, 5);
 		StartGame ();
 	}
 
-	const int BoardSize = 36; //cards on the table
+	//difficulty = number of dimensions (3..5): fewer dimensions, fewer cards on the table and fewer points per set
+	public const int MaxBoardSize = 36;
+	static readonly int[] BoardSizes = { 12, 24, 36 };
+	static readonly int[] BoardColumns = { 4, 6, 9 };
+	static readonly int[] PointsPerSet = { 1, 4, 16 };
+	public int dimensionCount = 5;
+	int boardSize; //cards on the table
 	List<int> deckOrder; //shuffled order of all cards
 	int nextCard; //position in deckOrder of the next card to draw
-	CardModel[] slots = new CardModel[BoardSize];
-	bool[] slotActive = new bool[BoardSize];
+	CardModel[] slots = new CardModel[MaxBoardSize];
+	bool[] slotActive = new bool[MaxBoardSize];
 
 	void StartGame ()
 	{
-		deck.Shuffle ();
+		boardSize = BoardSizes [dimensionCount - 3];
+		deck.Shuffle (dimensionCount);
 		deckOrder = new List<int> (deck.GetCards ());
 		ShowCards ();
-		nextCard = BoardSize;
+		nextCard = boardSize;
 		EnsureSetOnBoard ();
 	}
 
@@ -155,7 +168,7 @@ public class DeckView : MonoBehaviour
 	{
 		CountSets ();
 		while (numberofSets == 0 && nextCard < deckOrder.Count) {
-			int slot = Random.Range (0, BoardSize);
+			int slot = Random.Range (0, boardSize);
 			if (slotActive [slot]) {
 				DrawCard (slot);
 				CountSets ();
@@ -177,18 +190,21 @@ public class DeckView : MonoBehaviour
 	{ 
 		int cardCount = 0;
 
+		int columns = BoardColumns [dimensionCount - 3];
+		int rows = boardSize / columns;
 		int coordx = 0; 
 		int coordy = 0;
 
 		foreach (int i in deck.GetCards()) {
-			if (cardCount < 36) {
-				if (coordx >= 9) {
+			if (cardCount < boardSize) {
+				if (coordx >= columns) {
 					coordx = 0;
 					coordy++;
 				}
 					
-				float cox = cardOffsetx * coordx;
-				float coy = cardOffsety * coordy;
+				//center a smaller board in the space of the full 9 x 4 board
+				float cox = cardOffsetx * (coordx + (9 - columns) / 2f);
+				float coy = cardOffsety * (coordy + (4 - rows) / 2f);
 
 
 				GameObject cardCopy = (GameObject)Instantiate (cardPrefab); //creat a copy of "cardPrefab"
@@ -218,6 +234,14 @@ public class DeckView : MonoBehaviour
 
 	}
 
+	//change the difficulty and start a new game
+	public void SetDimensions (int value)
+	{
+		dimensionCount = Mathf.Clamp (value, 3, 5);
+		PlayerPrefs.SetInt ("Dimensions", dimensionCount);
+		Restart ();
+	}
+
 	public void Restart ()
 	{
 		ClearSelection ();
@@ -226,7 +250,7 @@ public class DeckView : MonoBehaviour
 				Destroy (model.gameObject);
 			}
 		}
-		System.Array.Clear (slotActive, 0, BoardSize);
+		System.Array.Clear (slotActive, 0, MaxBoardSize);
 		shownCardIndex.Clear ();
 		score = 0;
 		message = "";

@@ -32,6 +32,17 @@ public static class SetLogic
 		return true;
 	}
 
+	//card index of the n-th card of a deck: n is read as base-4 digits, one per dimension
+	//(a deck with fewer dimensions only uses the first digits; the other dimensions stay 0)
+	public static int DeckCardIndex (int n)
+	{
+		int[] coord = new int[Dimensions];
+		for (int dim = 0; dim < Dimensions; dim++) {
+			coord [dim] = (n >> (2 * dim)) & 3;
+		}
+		return DimensionToIndex (coord);
+	}
+
 	public static int DimensionToIndex (int[] coord5)
 	{
 		int temp;
