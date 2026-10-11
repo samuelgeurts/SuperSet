@@ -1,9 +1,5 @@
-﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
-//using System;
-using UnityEngine.SceneManagement;
 
 //deckview needs deck
 [RequireComponent (typeof(DeckModel))]
@@ -18,14 +14,19 @@ public class DeckView : MonoBehaviour
 	public float cardOffsety;
 	public GameObject cardPrefab;
 	private int[,] shownCardDimension = new int[5, 36];
-	public int[] set1 = new int[4];
-	public int numberofSets;
+	public int numberofSets; //sets on the table that are not found yet
 	public List<int> shownCardIndex = new List<int> ();
 
-	public const int SetSize = 4; //cards needed for one set
-	public List<CardModel> selectedCards = new List<CardModel> ();
+	//difficulty: number of dimensions (3..5) and set size (3 or 4 cards, also the number of values per dimension)
+	public int dimensionCount = 5;
+	public int setSize = 4;
+	public const int MaxBoardSize = 36;
 
-	//select or deselect a clicked card; a fifth card is ignored until one is deselected
+	public List<CardModel> selectedCards = new List<CardModel> ();
+	List<int[]> boardSets = new List<int[]> (); //all sets on the table, as slot numbers
+	List<int[]> foundSets = new List<int[]> (); //the sets of the table the player already found
+
+	//select or deselect a clicked card; one card too many is ignored until one is deselected
 	public void ToggleSelection (CardModel card)
 	{
 		if (gameOver) {
@@ -33,53 +34,97 @@ public class DeckView : MonoBehaviour
 		}
 		if (selectedCards.Remove (card)) {
 			card.SetSelected (false);
-		} else if (selectedCards.Count < SetSize) {
+		} else if (selectedCards.Count < setSize) {
 			selectedCards.Add (card);
 			card.SetSelected (true);
-			if (selectedCards.Count == SetSize) {
+			if (selectedCards.Count == setSize) {
 				CheckSelection ();
 			}
 		}
 	}
 
-	public int score;
+	public int score; //total over all games; kept between sessions
+	const string ScoreKey = "TotalScore";
+
+	void SaveScore ()
+	{
+		PlayerPrefs.SetInt (ScoreKey, score);
+		PlayerPrefs.Save ();
+	}
+
 	string message = "";
 	float messageUntil;
-	GUIStyle labelStyle;
 
 	//true if the selected cards form a set: every dimension all the same or all different
 	bool SelectionIsSet ()
 	{
-		int[][] d = new int[SetSize][];
-		for (int c = 0; c < SetSize; c++) {
-			d [c] = IndexToDimension (selectedCards [c].cardIndex);
+		int[] indexes = new int[setSize];
+		for (int c = 0; c < setSize; c++) {
+			indexes [c] = selectedCards [c].cardIndex;
 		}
-		for (int dim = 0; dim < 5; dim++) {
-			if (!IsSet4 (d [0] [dim], d [1] [dim], d [2] [dim], d [3] [dim])) {
-				return false;
-			}
-		}
-		return true;
+		return SetLogic.IsSetCards (indexes, dimensionCount);
 	}
 
 	void CheckSelection ()
 	{
-		if (SelectionIsSet ()) {
-			score++;
-			ShowMessage ("Set gevonden!");
-			int[] found = new int[SetSize];
-			for (int c = 0; c < SetSize; c++) {
-				found [c] = System.Array.IndexOf (slots, selectedCards [c]);
-			}
-			ClearSelection ();
-			foreach (int slot in found) {
-				DrawCard (slot);
-			}
-			EnsureSetOnBoard ();
-		} else {
+		if (!SelectionIsSet ()) {
 			ShowMessage ("Geen set");
 			ClearSelection ();
+			return;
 		}
+
+		int[] found = new int[setSize];
+		for (int c = 0; c < setSize; c++) {
+			found [c] = System.Array.IndexOf (slots, selectedCards [c]);
+		}
+		System.Array.Sort (found);
+		ClearSelection ();
+
+		if (IsFound (found)) {
+			ShowMessage ("Die set had je al");
+			return;
+		}
+		foundSets.Add (found);
+		score += SetLogic.PointsPerSet (dimensionCount, setSize);
+		SaveScore ();
+		foreach (int slot in found) {
+			slots [slot].SetFound (true);
+		}
+		numberofSets = boardSets.Count - foundSets.Count;
+		Numberofsets.numberofSets = numberofSets;
+
+		if (numberofSets > 0) {
+			//more sets on the table: the cards stay, also the ones shared with the next set
+			ShowMessage ("Set gevonden! Nog " + numberofSets + " op tafel");
+		} else {
+			ShowMessage ("Set gevonden!");
+			ReplaceFoundCards ();
+		}
+	}
+
+	bool IsFound (int[] set)
+	{
+		foreach (int[] other in foundSets) {
+			if (System.Linq.Enumerable.SequenceEqual (other, set)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	//all sets on the table are found: put new cards on the places of every card from a found set
+	void ReplaceFoundCards ()
+	{
+		HashSet<int> used = new HashSet<int> ();
+		foreach (int[] set in foundSets) {
+			foreach (int slot in set) {
+				used.Add (slot);
+			}
+		}
+		foreach (int slot in used) {
+			ChangeCard (slot);
+		}
+		EnsureSetOnBoard ();
 	}
 
 	void ClearSelection ()
@@ -96,350 +141,276 @@ public class DeckView : MonoBehaviour
 		messageUntil = Time.time + 1.5f;
 	}
 
+	static readonly string[] dimensionNames = { "kleur", "vorm", "aantal", "vulling", "grootte" };
+
+	//the rule of the game, for the difficulty that is chosen now
+	string RuleText ()
+	{
+		string names = "";
+		for (int d = 0; d < dimensionCount; d++) {
+			names += (d == 0 ? "" : (d == dimensionCount - 1 ? " en " : ", ")) + dimensionNames [d];
+		}
+		return "Spelregel: kies " + setSize + " kaarten waarbij ieder kenmerk (" + names +
+		") op alle kaarten gelijk is OF op alle kaarten verschillend. Gevonden sets krijgen een rode rand; " +
+		"nieuwe kaarten komen pas als alle sets op tafel gevonden zijn.";
+	}
+
+	//a button of the menu; the chosen option is colored. Returns true when another option was clicked
+	bool MenuButton (Rect rect, string text, bool chosen)
+	{
+		bool clicked = GUI.Button (rect, text, chosen ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle);
+		return clicked && !chosen;
+	}
+
 	void OnGUI ()
 	{
-		if (labelStyle == null) {
-			labelStyle = new GUIStyle (GUI.skin.label);
-			labelStyle.fontSize = 22;
-			labelStyle.normal.textColor = Color.white;
-		}
-		GUI.Label (new Rect (10, 50, 400, 32), "Score: " + score, labelStyle);
-		if (Time.time < messageUntil) {
-			GUI.Label (new Rect (10, 82, 400, 32), message, labelStyle);
-		}
-		if (gameOver) {
-			float w = 320;
-			float h = 160;
-			Rect box = new Rect ((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
-			GUI.Box (box, "");
-			GUI.Label (new Rect (box.x + 20, box.y + 15, w - 40, 32), "Spel afgelopen", labelStyle);
-			GUI.Label (new Rect (box.x + 20, box.y + 50, w - 40, 32), "Score: " + score, labelStyle);
-			if (GUI.Button (new Rect (box.x + 20, box.y + 100, w - 40, 36), "Nieuw spel")) {
-				Restart ();
+		UiStyle.EnsureStyles ();
+
+		//the rule of the game, in a banner at the top
+		GUI.Box (new Rect (8, 4, Screen.width - 16, 40), RuleText (), UiStyle.BannerStyle);
+
+		//menu in a narrow panel on the left, buttons under each other, so it never covers the cards
+		const float x = 10;
+		const float w = 98;
+		const float top = 54;
+		GUI.Box (new Rect (2, top - 6, 112, 372), "", UiStyle.PanelStyle);
+		GUI.Label (new Rect (x, top, w, 18), "Score", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, top + 15, w, 30), score.ToString (), UiStyle.TitleStyle);
+		GUI.Label (new Rect (x, top + 52, w, 18), "Punten per set", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, top + 67, w, 30), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), UiStyle.ValueStyle);
+
+		GUI.Label (new Rect (x, top + 108, w, 18), "Eigenschappen", UiStyle.LabelStyle);
+		for (int d = 3; d <= 5; d++) {
+			string text = d + "   +" + SetLogic.PointsPerSet (d, setSize);
+			if (MenuButton (new Rect (x, top + 128 + (d - 3) * 32, w, 28), text, d == dimensionCount)) {
+				SetDifficulty (d, setSize);
 			}
 		}
-	}
 
+		GUI.Label (new Rect (x, top + 228, w, 18), "Kaarten per set", UiStyle.LabelStyle);
+		for (int s = 3; s <= 4; s++) {
+			string text = s + " kaarten +" + SetLogic.PointsPerSet (dimensionCount, s);
+			if (MenuButton (new Rect (x, top + 248 + (s - 3) * 32, w, 28), text, s == setSize)) {
+				SetDifficulty (dimensionCount, s);
+			}
+		}
 
-	//	//function to check if all parameters are the same
-	//	bool AllSame(params int[] list)
-	//	{
-	//		return (list as IEnumerable<int>).Equals ();
-	//	}
-	//
-	//	bool AllDifferent(params int[] list)
-	//	{
-	//		for list
-	//
-	//		return (list as IEnumerable<int>). ();
-	//	}
+		if (Time.time < messageUntil) {
+			GUI.Label (new Rect (x, top + 320, w, 40), message, UiStyle.MessageStyle);
+		}
 
-	// return true if al three cards are different or the same
-	bool IsSet (int a1, int a2, int a3)
-	{
-		return ((a1 == a2 && a1 == a3) || (a1 != a2 && a1 != a3 && a2 != a3));
-	}
-
-	bool IsSet4 (int a1, int a2, int a3, int a4)
-	{
-		return ((a1 == a2 && a1 == a3 && a1 == a4) ||
-		(a4 != a1 && a4 != a2 && a4 != a3 && a1 != a2 && a1 != a3 && a2 != a3));
+		if (gameOver) {
+			float bw = 320;
+			float bh = 170;
+			Rect box = new Rect ((Screen.width - bw) / 2, (Screen.height - bh) / 2, bw, bh);
+			GUI.Box (box, "", UiStyle.PanelStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Spel afgelopen", UiStyle.TitleStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), "Score: " + score, UiStyle.ValueStyle);
+			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Nieuw spel", UiStyle.ActionButtonStyle)) {
+				NewGame ();
+			}
+		}
 	}
 
 	void Start ()
 	{
 		deck = GetComponent<DeckModel> ();
-		StartGame ();
+		dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", dimensionCount), 3, 5);
+		setSize = Mathf.Clamp (PlayerPrefs.GetInt ("SetSize", setSize), 3, 4);
+		score = PlayerPrefs.GetInt (ScoreKey, 0);
+		UiStyle.CreateBackground ();
+		cardPrefab.SetActive (false); //the card in the scene is only a template, not a playing card
+		LoadBoard ();
 	}
 
-	const int BoardSize = 36; //cards on the table
-	List<int> deckOrder; //shuffled order of all cards
-	int nextCard; //position in deckOrder of the next card to draw
-	CardModel[] slots = new CardModel[BoardSize];
-	bool[] slotActive = new bool[BoardSize];
-
-	void StartGame ()
+	//the table of one difficulty; kept while the player looks at another difficulty
+	class Board
 	{
-		deck.Shuffle ();
-		deckOrder = new List<int> (deck.GetCards ());
-		ShowCards ();
-		nextCard = BoardSize;
-		EnsureSetOnBoard ();
+		public List<int> deckOrder; //shuffled order of all cards
+		public int nextCard; //position in deckOrder of the next card to draw
+		public List<int> cardIndex; //card on every slot
+		public bool[] slotActive;
+		public List<int[]> foundSets;
+		public bool gameOver;
 	}
 
-	//put a card from the deck in a slot; hides the slot when the deck is empty
-	void DrawCard (int slot)
+	Dictionary<int, Board> boards = new Dictionary<int, Board> ();
+
+	int BoardKey ()
 	{
-		CardModel model = slots [slot];
-		if (nextCard >= deckOrder.Count) {
-			slotActive [slot] = false;
-			model.gameObject.SetActive (false);
-			return;
-		}
-		int index = deckOrder [nextCard++];
-		model.cardIndex = index;
-		model.ToggleFace (true);
-		int[] dimensions = IndexToDimension (index);
-		for (int j = 0; j < 5; j++) {
-			shownCardDimension [j, slot] = dimensions [j];
-		}
-		shownCardIndex [slot] = index;
+		return dimensionCount * 10 + setSize;
 	}
 
-	//count the sets on the table; while there is none, swap random cards for new ones
-	void EnsureSetOnBoard ()
-	{
-		numberofSets = NumberOfSets (shownCardDimension);
-		while (numberofSets == 0 && nextCard < deckOrder.Count) {
-			int slot = Random.Range (0, BoardSize);
-			if (slotActive [slot]) {
-				DrawCard (slot);
-				numberofSets = NumberOfSets (shownCardDimension);
-			}
-		}
-		gameOver = numberofSets == 0; //deck empty and no set left on the table
-	}
-
+	int boardSize; //cards on the table
+	List<int> deckOrder;
+	int nextCard;
+	CardModel[] slots = new CardModel[MaxBoardSize];
+	bool[] slotActive = new bool[MaxBoardSize];
 	bool gameOver;
 
-	//List<int> foundSets = new List<int>();
-
-	public int DimensionToIndex (int[] coord5)
+	//show the table of the chosen difficulty: the one kept from before, or a new one
+	void LoadBoard ()
 	{
-
-		int temp;
-		//scale
-		if (coord5 [4] == 0) {
-			temp = 0;
-		} else if (coord5 [4] == 1) {
-			temp = 16;
-		} else if (coord5 [4] == 2) {
-			temp = 512;
-		} else { 
-			temp = 512 + 16;
-		}
-		//color + shape + number + structure + scale
-		return (coord5 [0] * 4) + (coord5 [1] * 128) + coord5 [2] + (coord5 [3] * 32) + temp;
-	}
-
-	public int[] IndexToDimension (int index)
-	{
-	
-		int[] temp = new int[5];
-
-		int color = (index % 16) / 4;
-		int shape = (index / 128) % 4;
-		int number = index % 4;
-		int structure = (index / 32) % 4;
-		int scale;
-
-		int scaletemp = (index / 16) % 2;
-
-		if ((scaletemp == 0) && index < 512) {
-			scale = 0; 
-		} else if (scaletemp == 1 && index < 512) {
-			scale = 1;
-		} else if (scaletemp == 0 && index >= 512) {
-			scale = 2;
+		boardSize = SetLogic.BoardSize (dimensionCount, setSize);
+		Board board;
+		if (!boards.TryGetValue (BoardKey (), out board)) {
+			StartNewBoard ();
 		} else {
-			scale = 3;
-		}
-			
-		temp [0] = color;
-		temp [1] = shape;
-		temp [2] = number;
-		temp [3] = structure;
-		temp [4] = scale;
-
-		//Debug.Log ("Color = " + dimensions[0]);
-		//Debug.Log ("Shape = " + dimensions[1]);
-		//Debug.Log ("Number = " + dimensions[2]);
-		//Debug.Log ("Structure = " + dimensions[3]);
-		//Debug.Log ("Scale = " + dimensions[4]);
-
-		return temp;
-	}
-
-	public int NumberOfSets (int[,] array)
-	{
-		Numberofsets.numberofSets = 0;
-		int numberofSets = 0;
-		//cards belonging to found set
-		int[] card1 = new int[5];
-		int[] card2 = new int[5];
-		int[] card3 = new int[5];
-		int[] card4 = new int[5];
-
-		//shuffle through all carts
-		for (int k1 = 0; k1 < 36; k1++) {
-			if (!slotActive [k1]) continue;
-			for (int k2 = k1 + 1; k2 < 36; k2++) {
-				if (!slotActive [k2]) continue;
-
-				//exclude same card
-				//if (k2 != k1) {
-
-				for (int k3 = k2 + 1; k3 < 36; k3++) {
-					if (!slotActive [k3]) continue;
-
-					if (//k3 != k2 && k3 != k1 && //exclude same card
-						IsSet (array [0, k1], array [0, k2], array [0, k3]) && //check color
-						IsSet (array [1, k1], array [1, k2], array [1, k3]) && //check ...
-						IsSet (array [2, k1], array [2, k2], array [2, k3]) &&
-						IsSet (array [3, k1], array [3, k2], array [3, k3]) &&
-						IsSet (array [4, k1], array [4, k2], array [4, k3])) {
-
-						//Debug.Log ("k1 = " + k1);
-						//Debug.Log ("k2 = " + k2);
-						//Debug.Log ("k3 = " + k3);
-
-						for (int k4 = k3 + 1; k4 < 36; k4++) {
-							if (!slotActive [k4]) continue;
-
-							// found a set
-							if (//k4 != k1 && k4 != k2 && k4 != k3 && 
-								IsSet4 (array [0, k1], array [0, k2], array [0, k3], array [0, k4]) &&
-								IsSet4 (array [1, k1], array [1, k2], array [1, k3], array [1, k4]) &&
-								IsSet4 (array [2, k1], array [2, k2], array [2, k3], array [2, k4]) &&
-								IsSet4 (array [3, k1], array [3, k2], array [3, k3], array [3, k4]) &&
-								IsSet4 (array [4, k1], array [4, k2], array [4, k3], array [4, k4])) {
-
-								//2d array to 4 1d arrays
-								for (int l1 = 0; l1 < 5; l1++) {
-									card1 [l1] = array [l1, k1];
-									card2 [l1] = array [l1, k2];
-									card3 [l1] = array [l1, k3];
-									card4 [l1] = array [l1, k4];
-								}
-								//index of set cards
-								set1 [0] = DimensionToIndex (card1);
-								set1 [1] = DimensionToIndex (card2);
-								set1 [2] = DimensionToIndex (card3);
-								set1 [3] = DimensionToIndex (card4);
-
-								//Debug.Log ("cards are = " + set1 [0] + " " + set1 [1] + " " + set1 [2] + " " + set1 [3]);
-
-								numberofSets++;
-								Numberofsets.numberofSets++;
-							}
-						}
-					}
-				}
-				//if (numberofSets == 0) {
-				//	SceneManager.LoadScene("Card Deck Test");
-				//}
-					
-					
-				//}
+			deckOrder = board.deckOrder;
+			nextCard = board.nextCard;
+			shownCardIndex = board.cardIndex;
+			slotActive = board.slotActive;
+			foundSets = board.foundSets;
+			gameOver = board.gameOver;
+			for (int slot = 0; slot < boardSize; slot++) {
+				SetDimensions (slot);
 			}
+			FindSets ();
 		}
-		return numberofSets;
+		ShowCards ();
 	}
 
-	void ShowCards ()
-	{ 
-		int cardCount = 0;
-
-//		foreach(int i in deck.GetCards())
-//		{
-//			float co = cardOffset * cardCount;
-//
-//			GameObject cardCopy = (GameObject)Instantiate (cardPrefab); //creat a copy of "cardPrefab"
-//			Vector3 temp = start + new Vector3 (co, 0f); //tempory position startposition + offset times current card
-//			cardCopy.transform.position = temp;
-//
-//			CardModel cardModel = cardCopy.GetComponent<CardModel> ();
-//			cardModel.cardIndex = i;
-//			cardModel.ToggleFace (true);
-//
-//
-//			cardCount++;
-//			//cardCopy.transform.position.x =  
-//		}
-
-		int coordx = 0; 
-		int coordy = 0;
-		//int[][] dimensions;
-
-		foreach (int i in deck.GetCards()) {
-			if (cardCount < 36) {
-				if (coordx >= 9) {
-					coordx = 0;
-					coordy++;
-				}
-					
-				float cox = cardOffsetx * coordx;
-				float coy = cardOffsety * coordy;
-
-				//Console.Write("{coordx} ");
-				//Console.WriteLine ();
-
-				GameObject cardCopy = (GameObject)Instantiate (cardPrefab); //creat a copy of "cardPrefab"
-				Vector3 temp = start + new Vector3 (cox, coy); //tempory position startposition + offset times current card
-				cardCopy.transform.position = temp;
-
-				CardModel cardModel = cardCopy.GetComponent<CardModel> ();
-				cardModel.cardIndex = i;
-				cardModel.deckView = this;
-				cardModel.ToggleFace (true);
-				slots [cardCount] = cardModel;
-				slotActive [cardCount] = true;
-
-
-
-				shownCardIndex.Add (i); //stores the shown card indexes in the List: shownCardIndex
-
-				int[] dimensions = IndexToDimension (i);
-				//generated 2d array with 5d coordinates
-				for (int j = 0; j < 5; j++) {
-					shownCardDimension [j, cardCount] = dimensions [j];
-				}
-
-
-				//for showing indexes and coordinates/dimensions at console
-//				int indexx = DimensionToIndex (dimensions);
-//				Debug.Log ("Card number = " + i);
-//				Debug.Log ("Color = " + dimensions [0]);
-//				Debug.Log ("Shape = " + dimensions [1]);
-//				Debug.Log ("Number = " + dimensions [2]);
-//				Debug.Log ("Structure = " + dimensions [3]);
-//				Debug.Log ("Scale = " + dimensions [4]);
-//				Debug.Log ("Indexx = " + indexx);
-//				Debug.Log ("card1 = " + set1[0] + " " + set1[1]+ " " + set1[1]+ " " + set1[1]);
-
-
-
-
-
-
-
-					
-
-				cardCount++;
-				coordx++;
-
-
-			}
-		}
-
-
-
-	}
-
-	public void Restart ()
+	//keep the table of the current difficulty and take its cards from the screen
+	void StoreBoard ()
 	{
+		Board board = new Board ();
+		board.deckOrder = deckOrder;
+		board.nextCard = nextCard;
+		board.cardIndex = shownCardIndex;
+		board.slotActive = slotActive;
+		board.foundSets = foundSets;
+		board.gameOver = gameOver;
+		boards [BoardKey ()] = board;
+
 		ClearSelection ();
 		foreach (CardModel model in slots) {
 			if (model != null) {
 				Destroy (model.gameObject);
 			}
 		}
-		System.Array.Clear (slotActive, 0, BoardSize);
-		shownCardIndex.Clear ();
-		score = 0;
-		message = "";
-		StartGame ();
+		System.Array.Clear (slots, 0, MaxBoardSize);
 	}
 
+	//deal a new table: shuffle the deck and put the first cards on it
+	void StartNewBoard ()
+	{
+		deck.Shuffle (dimensionCount, setSize);
+		deckOrder = new List<int> (deck.GetCards ());
+		shownCardIndex = new List<int> ();
+		slotActive = new bool[MaxBoardSize];
+		for (int slot = 0; slot < boardSize; slot++) {
+			shownCardIndex.Add (deckOrder [slot]);
+			slotActive [slot] = true;
+			SetDimensions (slot);
+		}
+		nextCard = boardSize;
+		foundSets = new List<int[]> ();
+		EnsureSetOnBoard ();
+	}
+
+	//copy the dimensions of the card on a slot to the table used to look for sets
+	void SetDimensions (int slot)
+	{
+		int[] dimensions = SetLogic.IndexToDimension (shownCardIndex [slot]);
+		for (int j = 0; j < 5; j++) {
+			shownCardDimension [j, slot] = dimensions [j];
+		}
+	}
+
+	//put the next card from the deck on a slot; hides the slot when the deck is empty
+	void ChangeCard (int slot)
+	{
+		if (nextCard >= deckOrder.Count) {
+			slotActive [slot] = false;
+		} else {
+			shownCardIndex [slot] = deckOrder [nextCard++];
+			SetDimensions (slot);
+		}
+		CardModel model = slots [slot];
+		if (model != null) {
+			model.SetFound (false);
+			model.gameObject.SetActive (slotActive [slot]);
+			model.cardIndex = shownCardIndex [slot];
+			model.ToggleFace (true);
+		}
+	}
+
+	//find the sets on the table; while there is none, swap random cards for new ones
+	void EnsureSetOnBoard ()
+	{
+		foundSets.Clear ();
+		FindSets ();
+		while (boardSets.Count == 0 && nextCard < deckOrder.Count) {
+			int slot = Random.Range (0, boardSize);
+			if (slotActive [slot]) {
+				ChangeCard (slot);
+				FindSets ();
+			}
+		}
+		gameOver = boardSets.Count == 0; //deck empty and no set left on the table
+	}
+
+	//look up all sets on the table and publish the number that is not found yet for the UI text
+	void FindSets ()
+	{
+		boardSets = SetLogic.FindSets (shownCardDimension, slotActive, setSize, dimensionCount);
+		numberofSets = boardSets.Count - foundSets.Count;
+		Numberofsets.numberofSets = numberofSets;
+	}
+
+	void ShowCards ()
+	{
+		int columns = SetLogic.BoardColumns (dimensionCount, setSize);
+		int rows = boardSize / columns;
+
+		for (int slot = 0; slot < boardSize; slot++) {
+			int coordx = slot % columns;
+			int coordy = slot / columns;
+
+			//center a smaller board in the space of the full 9 x 4 board
+			float cox = cardOffsetx * (coordx + (9 - columns) / 2f);
+			float coy = cardOffsety * (coordy + (4 - rows) / 2f);
+
+			GameObject cardCopy = (GameObject)Instantiate (cardPrefab); //creat a copy of "cardPrefab"
+			cardCopy.SetActive (true); //the template is inactive, so is its copy
+			Vector3 temp = start + new Vector3 (cox, coy); //tempory position startposition + offset times current card
+			cardCopy.transform.position = temp;
+
+			CardModel cardModel = cardCopy.GetComponent<CardModel> ();
+			cardModel.cardIndex = shownCardIndex [slot];
+			cardModel.deckView = this;
+			cardModel.ToggleFace (true);
+			slots [slot] = cardModel;
+			cardCopy.SetActive (slotActive [slot]);
+		}
+
+		//the sets that were found already keep their red border
+		foreach (int[] set in foundSets) {
+			foreach (int slot in set) {
+				slots [slot].SetFound (true);
+			}
+		}
+	}
+
+	//change the difficulty; the table of that difficulty stays as the player left it
+	public void SetDifficulty (int dimensions, int size)
+	{
+		StoreBoard ();
+		dimensionCount = Mathf.Clamp (dimensions, 3, 5);
+		setSize = Mathf.Clamp (size, 3, 4);
+		PlayerPrefs.SetInt ("Dimensions", dimensionCount);
+		PlayerPrefs.SetInt ("SetSize", setSize);
+		message = "";
+		LoadBoard ();
+	}
+
+	//after "Spel afgelopen": a new table for the same difficulty
+	void NewGame ()
+	{
+		StoreBoard ();
+		boards.Remove (BoardKey ());
+		message = "";
+		LoadBoard ();
+	}
 
 }

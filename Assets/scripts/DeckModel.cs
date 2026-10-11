@@ -22,15 +22,17 @@ public class DeckModel : MonoBehaviour {
 
 //	}
 
-	public void Shuffle() {
+	//dimensions = 3..5 and setSize = 3 or 4 (values per dimension): the deck only holds the cards that fit
+	public void Shuffle(int dimensions = SetLogic.Dimensions, int setSize = 4) {
 		if (cards == null) {
 			cards = new List<int> ();
 		} else {
 			cards.Clear ();
 		}
 
-		for (int i = 0; i < 1024; i++) {
-			cards.Add (i);
+		int deckSize = SetLogic.DeckSize (dimensions, setSize);
+		for (int i = 0; i < deckSize; i++) {
+			cards.Add (SetLogic.DeckCardIndex (i, dimensions, setSize));
 		}
 
 		//Shuffle part
