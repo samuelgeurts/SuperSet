@@ -37,7 +37,15 @@ public class DeckView : MonoBehaviour
 		}
 	}
 
-	public int score;
+	public int score; //total over all games; kept between sessions
+	const string ScoreKey = "TotalScore";
+
+	void SaveScore ()
+	{
+		PlayerPrefs.SetInt (ScoreKey, score);
+		PlayerPrefs.Save ();
+	}
+
 	string message = "";
 	float messageUntil;
 	GUIStyle labelStyle;
@@ -56,6 +64,7 @@ public class DeckView : MonoBehaviour
 	{
 		if (SelectionIsSet ()) {
 			score += PointsPerSet [dimensionCount - 3];
+			SaveScore ();
 			ShowMessage ("Set gevonden!");
 			int[] found = new int[SetSize];
 			for (int c = 0; c < SetSize; c++) {
@@ -119,6 +128,7 @@ public class DeckView : MonoBehaviour
 	{
 		deck = GetComponent<DeckModel> ();
 		dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", dimensionCount), 3, 5);
+		score = PlayerPrefs.GetInt (ScoreKey, 0);
 		StartGame ();
 	}
 
@@ -252,7 +262,6 @@ public class DeckView : MonoBehaviour
 		}
 		System.Array.Clear (slotActive, 0, MaxBoardSize);
 		shownCardIndex.Clear ();
-		score = 0;
 		message = "";
 		StartGame ();
 	}
