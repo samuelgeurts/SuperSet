@@ -30,6 +30,7 @@ public class CardModel : MonoBehaviour {
 		spriteRenderer = GetComponent<SpriteRenderer>(); //angle brackets specify the type
 		baseScale = transform.localScale;
 		FitColliderToSprite ();
+		CreateShadow ();
 	}
 
 	//make the whole card clickable: size the collider to the card sprite, not the prefab default
@@ -84,38 +85,41 @@ public class CardModel : MonoBehaviour {
 
 
 	GameObject outline; //red border behind the card, shown when the card is part of a found set
-	static Sprite whiteSprite;
 
 	public void SetFound(bool value)
 	{
 		if (value && outline == null) {
-			CreateOutline ();
+			outline = CreateBehind ("FoundOutline", UiStyle.Found, 0.06f, Vector2.zero, -1);
 		}
 		if (outline != null) {
 			outline.SetActive (value);
 		}
 	}
 
-	void CreateOutline()
+	//a soft shadow under the card
+	void CreateShadow()
 	{
-		if (whiteSprite == null) {
-			Texture2D texture = new Texture2D (1, 1);
-			texture.SetPixel (0, 0, Color.white);
-			texture.Apply ();
-			whiteSprite = Sprite.Create (texture, new Rect (0, 0, 1, 1), new Vector2 (0.5f, 0.5f), 1f);
-		}
+		CreateBehind ("Shadow", new Color (0f, 0f, 0f, 0.35f), 0.03f, new Vector2 (0.03f, -0.04f), -2);
+	}
+
+	//a rounded rectangle behind the card: margin and offset are fractions of the card width
+	GameObject CreateBehind(string objectName, Color color, float margin, Vector2 offset, int order)
+	{
 		Sprite face = (faces != null && faces.Length > 0) ? faces [0] : spriteRenderer.sprite;
 		Vector2 size = face.bounds.size;
-		float margin = size.x * 0.06f;
+		float m = size.x * margin;
 
-		outline = new GameObject ("FoundOutline");
-		outline.transform.SetParent (transform, false);
-		outline.transform.localPosition = face.bounds.center;
-		outline.transform.localScale = new Vector3 (size.x + 2 * margin, size.y + 2 * margin, 1f);
-		SpriteRenderer border = outline.AddComponent<SpriteRenderer> ();
-		border.sprite = whiteSprite;
-		border.color = new Color (0.9f, 0.1f, 0.1f);
+		GameObject behind = new GameObject (objectName);
+		behind.transform.SetParent (transform, false);
+		behind.transform.localPosition = face.bounds.center + new Vector3 (offset.x * size.x, offset.y * size.x, 0f);
+		SpriteRenderer border = behind.AddComponent<SpriteRenderer> ();
+		border.sprite = UiStyle.RoundedSprite (size.x * 0.08f);
+		border.drawMode = SpriteDrawMode.Sliced;
+		border.size = new Vector2 (size.x + 2 * m, size.y + 2 * m);
+		border.color = color;
 		border.sortingLayerID = spriteRenderer.sortingLayerID;
-		border.sortingOrder = spriteRenderer.sortingOrder - 1;
+		border.sortingOrder = spriteRenderer.sortingOrder + order;
+		return behind;
 	}
+
 }

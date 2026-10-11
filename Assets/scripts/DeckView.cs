@@ -155,78 +155,58 @@ public class DeckView : MonoBehaviour
 		"nieuwe kaarten komen pas als alle sets op tafel gevonden zijn.";
 	}
 
-	GUIStyle bigStyle;
-	GUIStyle smallStyle;
-	GUIStyle ruleStyle;
-	GUIStyle buttonStyle;
-
 	//a button of the menu; the chosen option is colored. Returns true when another option was clicked
 	bool MenuButton (Rect rect, string text, bool chosen)
 	{
-		Color old = GUI.backgroundColor;
-		if (chosen) {
-			GUI.backgroundColor = new Color (0.3f, 0.85f, 0.75f);
-		}
-		bool clicked = GUI.Button (rect, text, buttonStyle);
-		GUI.backgroundColor = old;
+		bool clicked = GUI.Button (rect, text, chosen ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle);
 		return clicked && !chosen;
 	}
 
 	void OnGUI ()
 	{
-		if (bigStyle == null) {
-			bigStyle = new GUIStyle (GUI.skin.label);
-			bigStyle.fontSize = 22;
-			bigStyle.normal.textColor = Color.white;
-			smallStyle = new GUIStyle (GUI.skin.label);
-			smallStyle.fontSize = 14;
-			smallStyle.normal.textColor = new Color (0.8f, 0.85f, 1f);
-			ruleStyle = new GUIStyle (smallStyle);
-			ruleStyle.fontSize = 12;
-			ruleStyle.wordWrap = true;
-			buttonStyle = new GUIStyle (GUI.skin.button);
-			buttonStyle.fontSize = 13;
-		}
+		UiStyle.EnsureStyles ();
 
-		GUI.Label (new Rect (10, 2, Screen.width - 20, 40), RuleText (), ruleStyle);
+		//the rule of the game, in a banner at the top
+		GUI.Box (new Rect (8, 4, Screen.width - 16, 40), RuleText (), UiStyle.BannerStyle);
 
-		//menu in a narrow column on the left, under each other, so it never covers the cards
+		//menu in a narrow panel on the left, buttons under each other, so it never covers the cards
 		const float x = 10;
-		const float w = 105;
-		const float top = 48;
-		GUI.Label (new Rect (x, top, w, 22), "Score", smallStyle);
-		GUI.Label (new Rect (x, top + 17, w + 40, 32), score.ToString (), bigStyle);
-		GUI.Label (new Rect (x, top + 57, w, 22), "Punten per set", smallStyle);
-		GUI.Label (new Rect (x, top + 74, w, 32), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), bigStyle);
+		const float w = 98;
+		const float top = 54;
+		GUI.Box (new Rect (2, top - 6, 112, 372), "", UiStyle.PanelStyle);
+		GUI.Label (new Rect (x, top, w, 18), "Score", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, top + 15, w, 30), score.ToString (), UiStyle.TitleStyle);
+		GUI.Label (new Rect (x, top + 52, w, 18), "Punten per set", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, top + 67, w, 30), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), UiStyle.ValueStyle);
 
-		GUI.Label (new Rect (x, top + 115, w, 22), "Eigenschappen", smallStyle);
+		GUI.Label (new Rect (x, top + 108, w, 18), "Eigenschappen", UiStyle.LabelStyle);
 		for (int d = 3; d <= 5; d++) {
 			string text = d + "   +" + SetLogic.PointsPerSet (d, setSize);
-			if (MenuButton (new Rect (x, top + 137 + (d - 3) * 30, w, 26), text, d == dimensionCount)) {
+			if (MenuButton (new Rect (x, top + 128 + (d - 3) * 32, w, 28), text, d == dimensionCount)) {
 				SetDifficulty (d, setSize);
 			}
 		}
 
-		GUI.Label (new Rect (x, top + 233, w, 22), "Kaarten per set", smallStyle);
+		GUI.Label (new Rect (x, top + 228, w, 18), "Kaarten per set", UiStyle.LabelStyle);
 		for (int s = 3; s <= 4; s++) {
 			string text = s + " kaarten +" + SetLogic.PointsPerSet (dimensionCount, s);
-			if (MenuButton (new Rect (x, top + 255 + (s - 3) * 30, w, 26), text, s == setSize)) {
+			if (MenuButton (new Rect (x, top + 248 + (s - 3) * 32, w, 28), text, s == setSize)) {
 				SetDifficulty (dimensionCount, s);
 			}
 		}
 
 		if (Time.time < messageUntil) {
-			GUI.Label (new Rect (x, top + 325, w + 30, 70), message, smallStyle);
+			GUI.Label (new Rect (x, top + 320, w, 40), message, UiStyle.MessageStyle);
 		}
 
 		if (gameOver) {
 			float bw = 320;
-			float bh = 160;
+			float bh = 170;
 			Rect box = new Rect ((Screen.width - bw) / 2, (Screen.height - bh) / 2, bw, bh);
-			GUI.Box (box, "");
-			GUI.Label (new Rect (box.x + 20, box.y + 15, bw - 40, 32), "Spel afgelopen", bigStyle);
-			GUI.Label (new Rect (box.x + 20, box.y + 50, bw - 40, 32), "Score: " + score, bigStyle);
-			if (GUI.Button (new Rect (box.x + 20, box.y + 100, bw - 40, 36), "Nieuw spel")) {
+			GUI.Box (box, "", UiStyle.PanelStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Spel afgelopen", UiStyle.TitleStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), "Score: " + score, UiStyle.ValueStyle);
+			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Nieuw spel", UiStyle.ActionButtonStyle)) {
 				NewGame ();
 			}
 		}
@@ -238,6 +218,7 @@ public class DeckView : MonoBehaviour
 		dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", dimensionCount), 3, 5);
 		setSize = Mathf.Clamp (PlayerPrefs.GetInt ("SetSize", setSize), 3, 4);
 		score = PlayerPrefs.GetInt (ScoreKey, 0);
+		UiStyle.CreateBackground ();
 		cardPrefab.SetActive (false); //the card in the scene is only a template, not a playing card
 		LoadBoard ();
 	}
