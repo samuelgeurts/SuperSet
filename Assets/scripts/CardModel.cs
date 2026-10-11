@@ -29,6 +29,18 @@ public class CardModel : MonoBehaviour {
 	void Awake() {
 		spriteRenderer = GetComponent<SpriteRenderer>(); //angle brackets specify the type
 		baseScale = transform.localScale;
+		FitColliderToSprite ();
+	}
+
+	//make the whole card clickable: size the collider to the card sprite, not the prefab default
+	void FitColliderToSprite ()
+	{
+		BoxCollider2D box = GetComponent<BoxCollider2D> ();
+		Sprite sprite = (faces != null && faces.Length > 0) ? faces [0] : spriteRenderer.sprite;
+		if (box != null && sprite != null) {
+			box.size = sprite.bounds.size;
+			box.offset = sprite.bounds.center;
+		}
 	}
 
 //
