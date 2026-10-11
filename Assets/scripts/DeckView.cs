@@ -149,6 +149,7 @@ public class DeckView : MonoBehaviour
 	void Start ()
 	{
 		deck = GetComponent<DeckModel> ();
+		cardPrefab.SetActive (false); //the card in the scene is only a template, not a playing card
 		StartGame ();
 	}
 
@@ -345,6 +346,7 @@ public class DeckView : MonoBehaviour
 //			float co = cardOffset * cardCount;
 //
 //			GameObject cardCopy = (GameObject)Instantiate (cardPrefab); //creat a copy of "cardPrefab"
+				cardCopy.SetActive (true); //the template is inactive, so is its copy
 //			Vector3 temp = start + new Vector3 (co, 0f); //tempory position startposition + offset times current card
 //			cardCopy.transform.position = temp;
 //
