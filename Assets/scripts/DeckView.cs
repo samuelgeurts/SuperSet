@@ -22,6 +22,104 @@ public class DeckView : MonoBehaviour
 	public int numberofSets;
 	public List<int> shownCardIndex = new List<int> ();
 
+	public const int SetSize = 4; //cards needed for one set
+	public List<CardModel> selectedCards = new List<CardModel> ();
+
+	//select or deselect a clicked card; a fifth card is ignored until one is deselected
+	public void ToggleSelection (CardModel card)
+	{
+		if (gameOver) {
+			return;
+		}
+		if (selectedCards.Remove (card)) {
+			card.SetSelected (false);
+		} else if (selectedCards.Count < SetSize) {
+			selectedCards.Add (card);
+			card.SetSelected (true);
+			if (selectedCards.Count == SetSize) {
+				CheckSelection ();
+			}
+		}
+	}
+
+	public int score;
+	string message = "";
+	float messageUntil;
+	GUIStyle labelStyle;
+
+	//true if the selected cards form a set: every dimension all the same or all different
+	bool SelectionIsSet ()
+	{
+		int[][] d = new int[SetSize][];
+		for (int c = 0; c < SetSize; c++) {
+			d [c] = IndexToDimension (selectedCards [c].cardIndex);
+		}
+		for (int dim = 0; dim < 5; dim++) {
+			if (!IsSet4 (d [0] [dim], d [1] [dim], d [2] [dim], d [3] [dim])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void CheckSelection ()
+	{
+		if (SelectionIsSet ()) {
+			score++;
+			ShowMessage ("Set gevonden!");
+			int[] found = new int[SetSize];
+			for (int c = 0; c < SetSize; c++) {
+				found [c] = System.Array.IndexOf (slots, selectedCards [c]);
+			}
+			ClearSelection ();
+			foreach (int slot in found) {
+				DrawCard (slot);
+			}
+			EnsureSetOnBoard ();
+		} else {
+			ShowMessage ("Geen set");
+			ClearSelection ();
+		}
+	}
+
+	void ClearSelection ()
+	{
+		foreach (CardModel card in selectedCards) {
+			card.SetSelected (false);
+		}
+		selectedCards.Clear ();
+	}
+
+	void ShowMessage (string text)
+	{
+		message = text;
+		messageUntil = Time.time + 1.5f;
+	}
+
+	void OnGUI ()
+	{
+		if (labelStyle == null) {
+			labelStyle = new GUIStyle (GUI.skin.label);
+			labelStyle.fontSize = 22;
+			labelStyle.normal.textColor = Color.white;
+		}
+		GUI.Label (new Rect (10, 50, 400, 32), "Score: " + score, labelStyle);
+		if (Time.time < messageUntil) {
+			GUI.Label (new Rect (10, 82, 400, 32), message, labelStyle);
+		}
+		if (gameOver) {
+			float w = 320;
+			float h = 160;
+			Rect box = new Rect ((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
+			GUI.Box (box, "");
+			GUI.Label (new Rect (box.x + 20, box.y + 15, w - 40, 32), "Spel afgelopen", labelStyle);
+			GUI.Label (new Rect (box.x + 20, box.y + 50, w - 40, 32), "Score: " + score, labelStyle);
+			if (GUI.Button (new Rect (box.x + 20, box.y + 100, w - 40, 36), "Nieuw spel")) {
+				Restart ();
+			}
+		}
+	}
+
 
 	//	//function to check if all parameters are the same
 	//	bool AllSame(params int[] list)
@@ -51,11 +149,58 @@ public class DeckView : MonoBehaviour
 	void Start ()
 	{
 		deck = GetComponent<DeckModel> ();
-		ShowCards ();
-
-		numberofSets = NumberOfSets(shownCardDimension);
-			
+		StartGame ();
 	}
+
+	const int BoardSize = 36; //cards on the table
+	List<int> deckOrder; //shuffled order of all cards
+	int nextCard; //position in deckOrder of the next card to draw
+	CardModel[] slots = new CardModel[BoardSize];
+	bool[] slotActive = new bool[BoardSize];
+
+	void StartGame ()
+	{
+		deck.Shuffle ();
+		deckOrder = new List<int> (deck.GetCards ());
+		ShowCards ();
+		nextCard = BoardSize;
+		EnsureSetOnBoard ();
+	}
+
+	//put a card from the deck in a slot; hides the slot when the deck is empty
+	void DrawCard (int slot)
+	{
+		CardModel model = slots [slot];
+		if (nextCard >= deckOrder.Count) {
+			slotActive [slot] = false;
+			model.gameObject.SetActive (false);
+			return;
+		}
+		int index = deckOrder [nextCard++];
+		model.cardIndex = index;
+		model.ToggleFace (true);
+		int[] dimensions = IndexToDimension (index);
+		for (int j = 0; j < 5; j++) {
+			shownCardDimension [j, slot] = dimensions [j];
+		}
+		shownCardIndex [slot] = index;
+	}
+
+	//count the sets on the table; while there is none, swap random cards for new ones
+	void EnsureSetOnBoard ()
+	{
+		numberofSets = NumberOfSets (shownCardDimension);
+		while (numberofSets == 0 && nextCard < deckOrder.Count) {
+			int slot = Random.Range (0, BoardSize);
+			if (slotActive [slot]) {
+				DrawCard (slot);
+				numberofSets = NumberOfSets (shownCardDimension);
+			}
+		}
+		gameOver = numberofSets == 0; //deck empty and no set left on the table
+	}
+
+	bool gameOver;
 
 	//List<int> foundSets = new List<int>();
 
@@ -127,12 +272,15 @@ public class DeckView : MonoBehaviour
 
 		//shuffle through all carts
 		for (int k1 = 0; k1 < 36; k1++) {
+			if (!slotActive [k1]) continue;
 			for (int k2 = k1 + 1; k2 < 36; k2++) {
+				if (!slotActive [k2]) continue;
 
 				//exclude same card
 				//if (k2 != k1) {
 
 				for (int k3 = k2 + 1; k3 < 36; k3++) {
+					if (!slotActive [k3]) continue;
 
 					if (//k3 != k2 && k3 != k1 && //exclude same card
 						IsSet (array [0, k1], array [0, k2], array [0, k3]) && //check color
@@ -146,6 +294,7 @@ public class DeckView : MonoBehaviour
 						//Debug.Log ("k3 = " + k3);
 
 						for (int k4 = k3 + 1; k4 < 36; k4++) {
+							if (!slotActive [k4]) continue;
 
 							// found a set
 							if (//k4 != k1 && k4 != k2 && k4 != k3 && 
@@ -168,7 +317,7 @@ public class DeckView : MonoBehaviour
 								set1 [2] = DimensionToIndex (card3);
 								set1 [3] = DimensionToIndex (card4);
 
-								Debug.Log ("cards are = " + set1 [0] + " " + set1 [1] + " " + set1 [2] + " " + set1 [3]);
+								//Debug.Log ("cards are = " + set1 [0] + " " + set1 [1] + " " + set1 [2] + " " + set1 [3]);
 
 								numberofSets++;
 								Numberofsets.numberofSets++;
@@ -231,7 +380,10 @@ public class DeckView : MonoBehaviour
 
 				CardModel cardModel = cardCopy.GetComponent<CardModel> ();
 				cardModel.cardIndex = i;
+				cardModel.deckView = this;
 				cardModel.ToggleFace (true);
+				slots [cardCount] = cardModel;
+				slotActive [cardCount] = true;
 
 
 
@@ -276,7 +428,17 @@ public class DeckView : MonoBehaviour
 
 	public void Restart ()
 	{
-		SceneManager.LoadScene ("Card Deck Test");
+		ClearSelection ();
+		foreach (CardModel model in slots) {
+			if (model != null) {
+				Destroy (model.gameObject);
+			}
+		}
+		System.Array.Clear (slotActive, 0, BoardSize);
+		shownCardIndex.Clear ();
+		score = 0;
+		message = "";
+		StartGame ();
 	}
 
 
