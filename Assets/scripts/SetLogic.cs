@@ -1,44 +1,92 @@
-//pure game logic for the 5-dimensional set game; no Unity objects involved
+using System.Collections.Generic;
+
+//pure game logic for the set game; no Unity objects involved.
+//A set is setSize cards (3 or 4) with setSize values per dimension: in every dimension the cards
+//are all the same or all different. dimensionCount (3..5) of the 5 dimensions are used.
 public static class SetLogic
 {
 	public const int Dimensions = 5; //color, shape, number, structure, scale
-	public const int SetSize = 4; //cards needed for one set
 
-	// return true if all three values are different or the same
-	public static bool IsSet (int a1, int a2, int a3)
+	//rules per difficulty; index = dimensionCount - 3, then setSize - 3
+	static readonly int[,] boardSizes = { { 9, 12 }, { 12, 24 }, { 15, 36 } };
+	static readonly int[,] boardColumns = { { 3, 4 }, { 4, 6 }, { 5, 9 } };
+
+	public static int BoardSize (int dimensionCount, int setSize)
 	{
-		return ((a1 == a2 && a1 == a3) || (a1 != a2 && a1 != a3 && a2 != a3));
+		return boardSizes [dimensionCount - 3, setSize - 3];
 	}
 
-	// return true if all four values are different or the same
-	public static bool IsSet4 (int a1, int a2, int a3, int a4)
+	public static int BoardColumns (int dimensionCount, int setSize)
 	{
-		return ((a1 == a2 && a1 == a3 && a1 == a4) ||
-		(a4 != a1 && a4 != a2 && a4 != a3 && a1 != a2 && a1 != a3 && a2 != a3));
+		return boardColumns [dimensionCount - 3, setSize - 3];
 	}
 
-	//true if the four cards (card indexes) form a set in every dimension
-	public static bool IsSet4Cards (int[] cardIndexes)
+	//points for one found set: harder with more dimensions (x setSize per extra dimension) and with bigger sets
+	public static int PointsPerSet (int dimensionCount, int setSize)
 	{
-		int[][] d = new int[SetSize][];
-		for (int c = 0; c < SetSize; c++) {
-			d [c] = IndexToDimension (cardIndexes [c]);
+		int points = setSize - 2;
+		for (int i = 3; i < dimensionCount; i++) {
+			points *= setSize;
 		}
-		for (int dim = 0; dim < Dimensions; dim++) {
-			if (!IsSet4 (d [0] [dim], d [1] [dim], d [2] [dim], d [3] [dim])) {
+		return points;
+	}
+
+	//true if the values of one dimension are all the same or all different
+	static bool AllSameOrAllDifferent (int[,] d, int dim, int[] slots, int count)
+	{
+		bool same = true;
+		bool different = true;
+		for (int i = 1; i < count; i++) {
+			for (int j = 0; j < i; j++) {
+				if (d [dim, slots [i]] == d [dim, slots [j]]) {
+					different = false;
+				} else {
+					same = false;
+				}
+			}
+		}
+		return same || different;
+	}
+
+	//true if the cards (card indexes) form a set in every used dimension
+	public static bool IsSetCards (int[] cardIndexes, int dimensionCount)
+	{
+		int count = cardIndexes.Length;
+		int[,] d = new int[Dimensions, count];
+		int[] slots = new int[count];
+		for (int c = 0; c < count; c++) {
+			int[] coord = IndexToDimension (cardIndexes [c]);
+			for (int dim = 0; dim < Dimensions; dim++) {
+				d [dim, c] = coord [dim];
+			}
+			slots [c] = c;
+		}
+		for (int dim = 0; dim < dimensionCount; dim++) {
+			if (!AllSameOrAllDifferent (d, dim, slots, count)) {
 				return false;
 			}
 		}
 		return true;
 	}
 
-	//card index of the n-th card of a deck: n is read as base-4 digits, one per dimension
-	//(a deck with fewer dimensions only uses the first digits; the other dimensions stay 0)
-	public static int DeckCardIndex (int n)
+	//number of cards in a deck: setSize values for each used dimension
+	public static int DeckSize (int dimensionCount, int setSize)
+	{
+		int size = 1;
+		for (int i = 0; i < dimensionCount; i++) {
+			size *= setSize;
+		}
+		return size;
+	}
+
+	//card index of the n-th card of a deck: n is read as digits in base setSize, one per used dimension
+	//(the unused dimensions stay 0, and every value stays below setSize)
+	public static int DeckCardIndex (int n, int dimensionCount, int setSize)
 	{
 		int[] coord = new int[Dimensions];
-		for (int dim = 0; dim < Dimensions; dim++) {
-			coord [dim] = (n >> (2 * dim)) & 3;
+		for (int dim = 0; dim < dimensionCount; dim++) {
+			coord [dim] = n % setSize;
+			n /= setSize;
 		}
 		return DimensionToIndex (coord);
 	}
@@ -90,46 +138,33 @@ public static class SetLogic
 		return temp;
 	}
 
-	//count the sets of four among the active slots; dimensions is [dimension, slot]
-	public static int CountSets (int[,] dimensions, bool[] active)
+	//find all sets among the active slots; dimensions is [dimension, slot]; each set is a list of slot numbers
+	public static List<int[]> FindSets (int[,] dimensions, bool[] active, int setSize, int dimensionCount)
 	{
-		int slots = active.Length;
-		int count = 0;
-
-		for (int k1 = 0; k1 < slots; k1++) {
-			if (!active [k1]) continue;
-			for (int k2 = k1 + 1; k2 < slots; k2++) {
-				if (!active [k2]) continue;
-				for (int k3 = k2 + 1; k3 < slots; k3++) {
-					if (!active [k3]) continue;
-					//the first three cards must already fit as a set of three
-					if (!AllDimensions3 (dimensions, k1, k2, k3)) continue;
-					for (int k4 = k3 + 1; k4 < slots; k4++) {
-						if (!active [k4]) continue;
-						if (AllDimensions4 (dimensions, k1, k2, k3, k4)) {
-							count++;
-						}
-					}
-				}
-			}
-		}
-		return count;
+		List<int[]> found = new List<int[]> ();
+		Search (dimensions, active, dimensionCount, new int[setSize], 0, 0, found);
+		return found;
 	}
 
-	static bool AllDimensions3 (int[,] d, int k1, int k2, int k3)
+	static void Search (int[,] d, bool[] active, int dimensionCount, int[] chosen, int depth, int from, List<int[]> found)
 	{
-		for (int dim = 0; dim < Dimensions; dim++) {
-			if (!IsSet (d [dim, k1], d [dim, k2], d [dim, k3])) {
-				return false;
+		for (int k = from; k < active.Length; k++) {
+			if (!active [k]) continue;
+			chosen [depth] = k;
+			//the cards chosen so far must already fit: every part of a set is itself all the same or all different
+			if (!PrefixFits (d, dimensionCount, chosen, depth + 1)) continue;
+			if (depth + 1 == chosen.Length) {
+				found.Add ((int[])chosen.Clone ());
+			} else {
+				Search (d, active, dimensionCount, chosen, depth + 1, k + 1, found);
 			}
 		}
-		return true;
 	}
 
-	static bool AllDimensions4 (int[,] d, int k1, int k2, int k3, int k4)
+	static bool PrefixFits (int[,] d, int dimensionCount, int[] chosen, int count)
 	{
-		for (int dim = 0; dim < Dimensions; dim++) {
-			if (!IsSet4 (d [dim, k1], d [dim, k2], d [dim, k3], d [dim, k4])) {
+		for (int dim = 0; dim < dimensionCount; dim++) {
+			if (!AllSameOrAllDifferent (d, dim, chosen, count)) {
 				return false;
 			}
 		}

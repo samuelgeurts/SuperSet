@@ -82,4 +82,40 @@ public class CardModel : MonoBehaviour {
 	}
 
 
+
+	GameObject outline; //red border behind the card, shown when the card is part of a found set
+	static Sprite whiteSprite;
+
+	public void SetFound(bool value)
+	{
+		if (value && outline == null) {
+			CreateOutline ();
+		}
+		if (outline != null) {
+			outline.SetActive (value);
+		}
+	}
+
+	void CreateOutline()
+	{
+		if (whiteSprite == null) {
+			Texture2D texture = new Texture2D (1, 1);
+			texture.SetPixel (0, 0, Color.white);
+			texture.Apply ();
+			whiteSprite = Sprite.Create (texture, new Rect (0, 0, 1, 1), new Vector2 (0.5f, 0.5f), 1f);
+		}
+		Sprite face = (faces != null && faces.Length > 0) ? faces [0] : spriteRenderer.sprite;
+		Vector2 size = face.bounds.size;
+		float margin = size.x * 0.06f;
+
+		outline = new GameObject ("FoundOutline");
+		outline.transform.SetParent (transform, false);
+		outline.transform.localPosition = face.bounds.center;
+		outline.transform.localScale = new Vector3 (size.x + 2 * margin, size.y + 2 * margin, 1f);
+		SpriteRenderer border = outline.AddComponent<SpriteRenderer> ();
+		border.sprite = whiteSprite;
+		border.color = new Color (0.9f, 0.1f, 0.1f);
+		border.sortingLayerID = spriteRenderer.sortingLayerID;
+		border.sortingOrder = spriteRenderer.sortingOrder - 1;
+	}
 }

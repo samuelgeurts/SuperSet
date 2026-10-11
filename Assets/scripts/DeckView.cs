@@ -14,13 +14,19 @@ public class DeckView : MonoBehaviour
 	public float cardOffsety;
 	public GameObject cardPrefab;
 	private int[,] shownCardDimension = new int[5, 36];
-	public int numberofSets;
+	public int numberofSets; //sets on the table that are not found yet
 	public List<int> shownCardIndex = new List<int> ();
 
-	public const int SetSize = SetLogic.SetSize; //cards needed for one set
-	public List<CardModel> selectedCards = new List<CardModel> ();
+	//difficulty: number of dimensions (3..5) and set size (3 or 4 cards, also the number of values per dimension)
+	public int dimensionCount = 5;
+	public int setSize = 4;
+	public const int MaxBoardSize = 36;
 
-	//select or deselect a clicked card; a fifth card is ignored until one is deselected
+	public List<CardModel> selectedCards = new List<CardModel> ();
+	List<int[]> boardSets = new List<int[]> (); //all sets on the table, as slot numbers
+	List<int[]> foundSets = new List<int[]> (); //the sets of the table the player already found
+
+	//select or deselect a clicked card; one card too many is ignored until one is deselected
 	public void ToggleSelection (CardModel card)
 	{
 		if (gameOver) {
@@ -28,10 +34,10 @@ public class DeckView : MonoBehaviour
 		}
 		if (selectedCards.Remove (card)) {
 			card.SetSelected (false);
-		} else if (selectedCards.Count < SetSize) {
+		} else if (selectedCards.Count < setSize) {
 			selectedCards.Add (card);
 			card.SetSelected (true);
-			if (selectedCards.Count == SetSize) {
+			if (selectedCards.Count == setSize) {
 				CheckSelection ();
 			}
 		}
@@ -48,37 +54,77 @@ public class DeckView : MonoBehaviour
 
 	string message = "";
 	float messageUntil;
-	GUIStyle labelStyle;
 
 	//true if the selected cards form a set: every dimension all the same or all different
 	bool SelectionIsSet ()
 	{
-		int[] indexes = new int[SetSize];
-		for (int c = 0; c < SetSize; c++) {
+		int[] indexes = new int[setSize];
+		for (int c = 0; c < setSize; c++) {
 			indexes [c] = selectedCards [c].cardIndex;
 		}
-		return SetLogic.IsSet4Cards (indexes);
+		return SetLogic.IsSetCards (indexes, dimensionCount);
 	}
 
 	void CheckSelection ()
 	{
-		if (SelectionIsSet ()) {
-			score += PointsPerSet [dimensionCount - 3];
-			SaveScore ();
-			ShowMessage ("Set gevonden!");
-			int[] found = new int[SetSize];
-			for (int c = 0; c < SetSize; c++) {
-				found [c] = System.Array.IndexOf (slots, selectedCards [c]);
-			}
-			ClearSelection ();
-			foreach (int slot in found) {
-				DrawCard (slot);
-			}
-			EnsureSetOnBoard ();
-		} else {
+		if (!SelectionIsSet ()) {
 			ShowMessage ("Geen set");
 			ClearSelection ();
+			return;
 		}
+
+		int[] found = new int[setSize];
+		for (int c = 0; c < setSize; c++) {
+			found [c] = System.Array.IndexOf (slots, selectedCards [c]);
+		}
+		System.Array.Sort (found);
+		ClearSelection ();
+
+		if (IsFound (found)) {
+			ShowMessage ("Die set had je al");
+			return;
+		}
+		foundSets.Add (found);
+		score += SetLogic.PointsPerSet (dimensionCount, setSize);
+		SaveScore ();
+		foreach (int slot in found) {
+			slots [slot].SetFound (true);
+		}
+		numberofSets = boardSets.Count - foundSets.Count;
+		Numberofsets.numberofSets = numberofSets;
+
+		if (numberofSets > 0) {
+			//more sets on the table: the cards stay, also the ones shared with the next set
+			ShowMessage ("Set gevonden! Nog " + numberofSets + " op tafel");
+		} else {
+			ShowMessage ("Set gevonden!");
+			ReplaceFoundCards ();
+		}
+	}
+
+	bool IsFound (int[] set)
+	{
+		foreach (int[] other in foundSets) {
+			if (System.Linq.Enumerable.SequenceEqual (other, set)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	//all sets on the table are found: put new cards on the places of every card from a found set
+	void ReplaceFoundCards ()
+	{
+		HashSet<int> used = new HashSet<int> ();
+		foreach (int[] set in foundSets) {
+			foreach (int slot in set) {
+				used.Add (slot);
+			}
+		}
+		foreach (int slot in used) {
+			DrawCard (slot);
+		}
+		EnsureSetOnBoard ();
 	}
 
 	void ClearSelection ()
@@ -95,30 +141,74 @@ public class DeckView : MonoBehaviour
 		messageUntil = Time.time + 1.5f;
 	}
 
+	GUIStyle bigStyle;
+	GUIStyle smallStyle;
+	GUIStyle buttonStyle;
+
+	//a button of the menu; the chosen option is colored. Returns true when another option was clicked
+	bool MenuButton (Rect rect, string text, bool chosen)
+	{
+		Color old = GUI.backgroundColor;
+		if (chosen) {
+			GUI.backgroundColor = new Color (0.3f, 0.85f, 0.75f);
+		}
+		bool clicked = GUI.Button (rect, text, buttonStyle);
+		GUI.backgroundColor = old;
+		return clicked && !chosen;
+	}
+
 	void OnGUI ()
 	{
-		if (labelStyle == null) {
-			labelStyle = new GUIStyle (GUI.skin.label);
-			labelStyle.fontSize = 22;
-			labelStyle.normal.textColor = Color.white;
+		if (bigStyle == null) {
+			bigStyle = new GUIStyle (GUI.skin.label);
+			bigStyle.fontSize = 22;
+			bigStyle.normal.textColor = Color.white;
+			smallStyle = new GUIStyle (GUI.skin.label);
+			smallStyle.fontSize = 14;
+			smallStyle.normal.textColor = new Color (0.8f, 0.85f, 1f);
+			buttonStyle = new GUIStyle (GUI.skin.button);
+			buttonStyle.fontSize = 13;
 		}
-		GUI.Label (new Rect (10, 50, 400, 32), "Score: " + score, labelStyle);
-		GUI.Label (new Rect (10, 120, 200, 32), "Moeilijkheid", labelStyle);
-		int choice = GUI.Toolbar (new Rect (10, 155, 240, 32), dimensionCount - 3, new string[] { "3", "4", "5" });
-		if (choice + 3 != dimensionCount) {
-			SetDimensions (choice + 3);
+
+		//menu in a narrow column on the left, under each other, so it never covers the cards
+		const float x = 10;
+		const float w = 105;
+		GUI.Label (new Rect (x, 35, w, 22), "Score", smallStyle);
+		GUI.Label (new Rect (x, 52, w + 40, 32), score.ToString (), bigStyle);
+		GUI.Label (new Rect (x, 92, w, 22), "Punten per set", smallStyle);
+		GUI.Label (new Rect (x, 109, w, 32), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), bigStyle);
+
+		GUI.Label (new Rect (x, 150, w, 22), "Eigenschappen", smallStyle);
+		for (int d = 3; d <= 5; d++) {
+			string text = d + "   +" + SetLogic.PointsPerSet (d, setSize);
+			if (MenuButton (new Rect (x, 172 + (d - 3) * 30, w, 26), text, d == dimensionCount)) {
+				SetDifficulty (d, setSize);
+			}
+		}
+
+		GUI.Label (new Rect (x, 268, w, 22), "Kaarten per set", smallStyle);
+		for (int s = 3; s <= 4; s++) {
+			string text = s + " kaarten +" + SetLogic.PointsPerSet (dimensionCount, s);
+			if (MenuButton (new Rect (x, 290 + (s - 3) * 30, w, 26), text, s == setSize)) {
+				SetDifficulty (dimensionCount, s);
+			}
+		}
+
+		if (MenuButton (new Rect (x, 362, w, 32), "Refresh", false)) {
+			Restart ();
 		}
 		if (Time.time < messageUntil) {
-			GUI.Label (new Rect (10, 82, 400, 32), message, labelStyle);
+			GUI.Label (new Rect (x, 402, w + 30, 70), message, smallStyle);
 		}
+
 		if (gameOver) {
-			float w = 320;
-			float h = 160;
-			Rect box = new Rect ((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
+			float bw = 320;
+			float bh = 160;
+			Rect box = new Rect ((Screen.width - bw) / 2, (Screen.height - bh) / 2, bw, bh);
 			GUI.Box (box, "");
-			GUI.Label (new Rect (box.x + 20, box.y + 15, w - 40, 32), "Spel afgelopen", labelStyle);
-			GUI.Label (new Rect (box.x + 20, box.y + 50, w - 40, 32), "Score: " + score, labelStyle);
-			if (GUI.Button (new Rect (box.x + 20, box.y + 100, w - 40, 36), "Nieuw spel")) {
+			GUI.Label (new Rect (box.x + 20, box.y + 15, bw - 40, 32), "Spel afgelopen", bigStyle);
+			GUI.Label (new Rect (box.x + 20, box.y + 50, bw - 40, 32), "Score: " + score, bigStyle);
+			if (GUI.Button (new Rect (box.x + 20, box.y + 100, bw - 40, 36), "Nieuw spel")) {
 				Restart ();
 			}
 		}
@@ -128,17 +218,12 @@ public class DeckView : MonoBehaviour
 	{
 		deck = GetComponent<DeckModel> ();
 		dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", dimensionCount), 3, 5);
+		setSize = Mathf.Clamp (PlayerPrefs.GetInt ("SetSize", setSize), 3, 4);
 		score = PlayerPrefs.GetInt (ScoreKey, 0);
 		cardPrefab.SetActive (false); //the card in the scene is only a template, not a playing card
 		StartGame ();
 	}
 
-	//difficulty = number of dimensions (3..5): fewer dimensions, fewer cards on the table and fewer points per set
-	public const int MaxBoardSize = 36;
-	static readonly int[] BoardSizes = { 12, 24, 36 };
-	static readonly int[] BoardColumns = { 4, 6, 9 };
-	static readonly int[] PointsPerSet = { 1, 4, 16 };
-	public int dimensionCount = 5;
 	int boardSize; //cards on the table
 	List<int> deckOrder; //shuffled order of all cards
 	int nextCard; //position in deckOrder of the next card to draw
@@ -147,8 +232,8 @@ public class DeckView : MonoBehaviour
 
 	void StartGame ()
 	{
-		boardSize = BoardSizes [dimensionCount - 3];
-		deck.Shuffle (dimensionCount);
+		boardSize = SetLogic.BoardSize (dimensionCount, setSize);
+		deck.Shuffle (dimensionCount, setSize);
 		deckOrder = new List<int> (deck.GetCards ());
 		ShowCards ();
 		nextCard = boardSize;
@@ -159,6 +244,7 @@ public class DeckView : MonoBehaviour
 	void DrawCard (int slot)
 	{
 		CardModel model = slots [slot];
+		model.SetFound (false);
 		if (nextCard >= deckOrder.Count) {
 			slotActive [slot] = false;
 			model.gameObject.SetActive (false);
@@ -174,36 +260,38 @@ public class DeckView : MonoBehaviour
 		shownCardIndex [slot] = index;
 	}
 
-	//count the sets on the table; while there is none, swap random cards for new ones
+	//find the sets on the table; while there is none, swap random cards for new ones
 	void EnsureSetOnBoard ()
 	{
-		CountSets ();
-		while (numberofSets == 0 && nextCard < deckOrder.Count) {
+		RefreshSets ();
+		while (boardSets.Count == 0 && nextCard < deckOrder.Count) {
 			int slot = Random.Range (0, boardSize);
 			if (slotActive [slot]) {
 				DrawCard (slot);
-				CountSets ();
+				RefreshSets ();
 			}
 		}
-		gameOver = numberofSets == 0; //deck empty and no set left on the table
+		gameOver = boardSets.Count == 0; //deck empty and no set left on the table
 	}
 
 	bool gameOver;
 
-	//count the sets on the table and publish the number for the UI text
-	void CountSets ()
+	//look up all sets on the table (none of them found yet) and publish the number for the UI text
+	void RefreshSets ()
 	{
-		numberofSets = SetLogic.CountSets (shownCardDimension, slotActive);
+		boardSets = SetLogic.FindSets (shownCardDimension, slotActive, setSize, dimensionCount);
+		foundSets.Clear ();
+		numberofSets = boardSets.Count;
 		Numberofsets.numberofSets = numberofSets;
 	}
 
 	void ShowCards ()
-	{ 
+	{
 		int cardCount = 0;
 
-		int columns = BoardColumns [dimensionCount - 3];
+		int columns = SetLogic.BoardColumns (dimensionCount, setSize);
 		int rows = boardSize / columns;
-		int coordx = 0; 
+		int coordx = 0;
 		int coordy = 0;
 
 		foreach (int i in deck.GetCards()) {
@@ -212,7 +300,7 @@ public class DeckView : MonoBehaviour
 					coordx = 0;
 					coordy++;
 				}
-					
+
 				//center a smaller board in the space of the full 9 x 4 board
 				float cox = cardOffsetx * (coordx + (9 - columns) / 2f);
 				float coy = cardOffsety * (coordy + (4 - rows) / 2f);
@@ -247,10 +335,12 @@ public class DeckView : MonoBehaviour
 	}
 
 	//change the difficulty and start a new game
-	public void SetDimensions (int value)
+	public void SetDifficulty (int dimensions, int size)
 	{
-		dimensionCount = Mathf.Clamp (value, 3, 5);
+		dimensionCount = Mathf.Clamp (dimensions, 3, 5);
+		setSize = Mathf.Clamp (size, 3, 4);
 		PlayerPrefs.SetInt ("Dimensions", dimensionCount);
+		PlayerPrefs.SetInt ("SetSize", setSize);
 		Restart ();
 	}
 
