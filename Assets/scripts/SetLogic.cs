@@ -9,8 +9,8 @@ public static class SetLogic
 
 	//rules per difficulty; index = dimensionCount - 3, then setSize - 3
 	//cards on the table: tuned (by simulation) so that on average 1 to 2 sets lie on the table
-	static readonly int[,] boardSizes = { { 7, 12 }, { 10, 24 }, { 15, 36 } };
-	static readonly int[,] boardColumns = { { 4, 4 }, { 5, 6 }, { 5, 9 } };
+	static readonly int[,] boardSizes = { { 6, 12 }, { 9, 24 }, { 15, 36 } };
+	static readonly int[,] boardColumns = { { 3, 4 }, { 3, 6 }, { 5, 9 } };
 
 	public static int BoardSize (int dimensionCount, int setSize)
 	{
