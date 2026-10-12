@@ -84,16 +84,21 @@ public class CardModel : MonoBehaviour {
 
 
 
-	GameObject outline; //red border behind the card, shown when the card is part of a found set
+	List<GameObject> outlines = new List<GameObject> (); //borders behind the card, one per found set the card is part of
 
-	public void SetFound(bool value)
+	//add a border in the color of a found set; a card in several sets gets several rings, the newest outside
+	public void AddFound(Color color)
 	{
-		if (value && outline == null) {
-			outline = CreateBehind ("FoundOutline", UiStyle.Found, 0.06f, Vector2.zero, -1);
+		int ring = outlines.Count;
+		outlines.Add (CreateBehind ("FoundOutline", color, 0.06f + 0.05f * ring, Vector2.zero, -1 - ring));
+	}
+
+	public void ClearFound()
+	{
+		foreach (GameObject outline in outlines) {
+			Destroy (outline);
 		}
-		if (outline != null) {
-			outline.SetActive (value);
-		}
+		outlines.Clear ();
 	}
 
 	//a soft shadow under the card

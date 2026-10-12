@@ -88,7 +88,7 @@ public class DeckView : MonoBehaviour
 		score += SetLogic.PointsPerSet (dimensionCount, setSize);
 		SaveScore ();
 		foreach (int slot in found) {
-			slots [slot].SetFound (true);
+			slots [slot].AddFound (UiStyle.FoundColor (foundSets.Count - 1));
 		}
 		numberofSets = boardSets.Count - foundSets.Count;
 		Numberofsets.numberofSets = numberofSets;
@@ -151,7 +151,7 @@ public class DeckView : MonoBehaviour
 			names += (d == 0 ? "" : (d == dimensionCount - 1 ? " en " : ", ")) + dimensionNames [d];
 		}
 		return "Spelregel: kies " + setSize + " kaarten waarbij ieder kenmerk (" + names +
-		") op alle kaarten gelijk is OF op alle kaarten verschillend. Gevonden sets krijgen een rode rand; " +
+		") op alle kaarten gelijk is OF op alle kaarten verschillend. Gevonden sets krijgen elk een eigen kleur rand; " +
 		"nieuwe kaarten komen pas als alle sets op tafel gevonden zijn.";
 	}
 
@@ -328,7 +328,7 @@ public class DeckView : MonoBehaviour
 		}
 		CardModel model = slots [slot];
 		if (model != null) {
-			model.SetFound (false);
+			model.ClearFound ();
 			model.gameObject.SetActive (slotActive [slot]);
 			model.cardIndex = shownCardIndex [slot];
 			model.ToggleFace (true);
@@ -361,7 +361,7 @@ public class DeckView : MonoBehaviour
 	void ShowCards ()
 	{
 		int columns = SetLogic.BoardColumns (dimensionCount, setSize);
-		int rows = boardSize / columns;
+		int rows = (boardSize + columns - 1) / columns;
 
 		for (int slot = 0; slot < boardSize; slot++) {
 			int coordx = slot % columns;
@@ -384,10 +384,10 @@ public class DeckView : MonoBehaviour
 			cardCopy.SetActive (slotActive [slot]);
 		}
 
-		//the sets that were found already keep their red border
-		foreach (int[] set in foundSets) {
-			foreach (int slot in set) {
-				slots [slot].SetFound (true);
+		//the sets that were found already keep their colored border
+		for (int i = 0; i < foundSets.Count; i++) {
+			foreach (int slot in foundSets [i]) {
+				slots [slot].AddFound (UiStyle.FoundColor (i));
 			}
 		}
 	}

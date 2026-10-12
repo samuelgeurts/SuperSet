@@ -14,6 +14,21 @@ public static class UiStyle
 	public static readonly Color TextDim = new Color (0.624f, 0.702f, 0.851f);
 	public static readonly Color Found = new Color (0.93f, 0.2f, 0.25f);
 
+	//border colors of the found sets on the table, one per set so they can be told apart
+	public static readonly Color[] FoundColors = {
+		new Color (0.93f, 0.2f, 0.25f), //red
+		new Color (1f, 0.76f, 0.1f), //amber
+		new Color (0.3f, 0.85f, 0.35f), //green
+		new Color (0.75f, 0.4f, 1f), //purple
+		new Color (1f, 0.5f, 0.8f), //pink
+		new Color (1f, 1f, 1f), //white
+	};
+
+	public static Color FoundColor (int setNumber)
+	{
+		return FoundColors [setNumber % FoundColors.Length];
+	}
+
 	const int TextureSize = 48;
 	const int CornerPixels = 16;
 

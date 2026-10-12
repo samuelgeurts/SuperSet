@@ -8,8 +8,9 @@ public static class SetLogic
 	public const int Dimensions = 5; //color, shape, number, structure, scale
 
 	//rules per difficulty; index = dimensionCount - 3, then setSize - 3
-	static readonly int[,] boardSizes = { { 9, 12 }, { 12, 24 }, { 15, 36 } };
-	static readonly int[,] boardColumns = { { 3, 4 }, { 4, 6 }, { 5, 9 } };
+	//cards on the table: tuned (by simulation) so that on average 1 to 2 sets lie on the table
+	static readonly int[,] boardSizes = { { 7, 12 }, { 10, 24 }, { 15, 36 } };
+	static readonly int[,] boardColumns = { { 4, 4 }, { 5, 6 }, { 5, 9 } };
 
 	public static int BoardSize (int dimensionCount, int setSize)
 	{
