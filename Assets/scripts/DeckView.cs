@@ -68,7 +68,7 @@ public class DeckView : MonoBehaviour
 	void CheckSelection ()
 	{
 		if (!SelectionIsSet ()) {
-			ShowMessage ("Geen set");
+			ShowMessage ("Not a set");
 			ClearSelection ();
 			return;
 		}
@@ -81,7 +81,7 @@ public class DeckView : MonoBehaviour
 		ClearSelection ();
 
 		if (IsFound (found)) {
-			ShowMessage ("Die set had je al");
+			ShowMessage ("You already found that set");
 			return;
 		}
 		foundSets.Add (found);
@@ -95,9 +95,9 @@ public class DeckView : MonoBehaviour
 
 		if (numberofSets > 0) {
 			//more sets on the table: the cards stay, also the ones shared with the next set
-			ShowMessage ("Set gevonden! Nog " + numberofSets + " op tafel");
+			ShowMessage ("Set found! " + numberofSets + " more on the table");
 		} else {
-			ShowMessage ("Set gevonden!");
+			ShowMessage ("Set found!");
 			ReplaceFoundCards ();
 		}
 	}
@@ -141,18 +141,18 @@ public class DeckView : MonoBehaviour
 		messageUntil = Time.time + 1.5f;
 	}
 
-	static readonly string[] dimensionNames = { "kleur", "vorm", "aantal", "vulling", "grootte" };
+	static readonly string[] dimensionNames = { "color", "shape", "number", "fill", "size" };
 
 	//the rule of the game, for the difficulty that is chosen now
 	string RuleText ()
 	{
 		string names = "";
 		for (int d = 0; d < dimensionCount; d++) {
-			names += (d == 0 ? "" : (d == dimensionCount - 1 ? " en " : ", ")) + dimensionNames [d];
+			names += (d == 0 ? "" : (d == dimensionCount - 1 ? " and " : ", ")) + dimensionNames [d];
 		}
-		return "Spelregel: kies " + setSize + " kaarten waarbij ieder kenmerk (" + names +
-		") op alle kaarten gelijk is OF op alle kaarten verschillend. Gevonden sets krijgen elk een eigen kleur rand; " +
-		"nieuwe kaarten komen pas als alle sets op tafel gevonden zijn.";
+		return "Rule: pick " + setSize + " cards where every attribute (" + names +
+		") is the same on all cards OR different on all cards. Each set you find gets its own border color; " +
+		"new cards only come when all sets on the table are found.";
 	}
 
 	//a button of the menu; the chosen option is colored. Returns true when another option was clicked
@@ -191,13 +191,13 @@ public class DeckView : MonoBehaviour
 	{
 		GUI.Label (new Rect (x, y, w, 18), "Score", UiStyle.LabelStyle);
 		GUI.Label (new Rect (x, y + 15, w, 30), score.ToString (), UiStyle.TitleStyle);
-		GUI.Label (new Rect (x, y + 52, w, 18), "Punten per set", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, y + 52, w, 18), "Points per set", UiStyle.LabelStyle);
 		GUI.Label (new Rect (x, y + 67, w, 30), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), UiStyle.ValueStyle);
 	}
 
 	void DrawDimensionButtons (float x, float y, float w)
 	{
-		GUI.Label (new Rect (x, y, w, 18), "Eigenschappen", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, y, w, 18), "Attributes", UiStyle.LabelStyle);
 		for (int d = 3; d <= 5; d++) {
 			string text = d + "   +" + SetLogic.PointsPerSet (d, setSize);
 			if (MenuButton (new Rect (x, y + 20 + (d - 3) * 32, w, 28), text, d == dimensionCount)) {
@@ -208,9 +208,9 @@ public class DeckView : MonoBehaviour
 
 	void DrawSizeButtons (float x, float y, float w)
 	{
-		GUI.Label (new Rect (x, y, w, 18), "Kaarten per set", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, y, w, 18), "Cards per set", UiStyle.LabelStyle);
 		for (int s = 3; s <= 4; s++) {
-			string text = s + " kaarten +" + SetLogic.PointsPerSet (dimensionCount, s);
+			string text = s + " cards +" + SetLogic.PointsPerSet (dimensionCount, s);
 			if (MenuButton (new Rect (x, y + 20 + (s - 3) * 32, w, 28), text, s == setSize)) {
 				SetDifficulty (dimensionCount, s);
 			}
@@ -262,9 +262,9 @@ public class DeckView : MonoBehaviour
 			float bh = 170;
 			Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);
 			GUI.Box (box, "", UiStyle.PanelStyle);
-			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Spel afgelopen", UiStyle.TitleStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Game over", UiStyle.TitleStyle);
 			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), "Score: " + score, UiStyle.ValueStyle);
-			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Nieuw spel", UiStyle.ActionButtonStyle)) {
+			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "New game", UiStyle.ActionButtonStyle)) {
 				NewGame ();
 			}
 		}
@@ -499,7 +499,7 @@ public class DeckView : MonoBehaviour
 		LoadBoard ();
 	}
 
-	//after "Spel afgelopen": a new table for the same difficulty
+	//after "Game over": a new table for the same difficulty
 	void NewGame ()
 	{
 		StoreBoard ();
