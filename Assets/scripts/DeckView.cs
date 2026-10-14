@@ -162,53 +162,119 @@ public class DeckView : MonoBehaviour
 		return clicked && !chosen;
 	}
 
+	//the screen is higher than wide (a phone held upright): the board and the menu are laid out vertically
+	static bool Portrait {
+		get { return Screen.height > Screen.width; }
+	}
+
+	const float PortraitBannerHeight = 92;
+	const float PortraitPanelHeight = 146;
+
+	//size of one GUI unit in screen pixels, so the menu keeps its size relative to the screen on a phone
+	static float UiScale ()
+	{
+		float scale = Portrait ? Screen.width / 420f : Mathf.Min (Screen.width / 960f, Screen.height / 600f);
+		return Mathf.Clamp (scale, 0.5f, 4f);
+	}
+
+	//the part of the screen for the cards, in GUI units (y from the top): what the menu leaves free
+	static Rect Playfield (float w, float h)
+	{
+		if (Portrait) {
+			float top = 4 + PortraitBannerHeight + 4;
+			return new Rect (4, top, w - 8, h - top - PortraitPanelHeight - 4);
+		}
+		return new Rect (120, 52, w - 124, h - 56);
+	}
+
+	void DrawScore (float x, float y, float w)
+	{
+		GUI.Label (new Rect (x, y, w, 18), "Score", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, y + 15, w, 30), score.ToString (), UiStyle.TitleStyle);
+		GUI.Label (new Rect (x, y + 52, w, 18), "Punten per set", UiStyle.LabelStyle);
+		GUI.Label (new Rect (x, y + 67, w, 30), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), UiStyle.ValueStyle);
+	}
+
+	void DrawDimensionButtons (float x, float y, float w)
+	{
+		GUI.Label (new Rect (x, y, w, 18), "Eigenschappen", UiStyle.LabelStyle);
+		for (int d = 3; d <= 5; d++) {
+			string text = d + "   +" + SetLogic.PointsPerSet (d, setSize);
+			if (MenuButton (new Rect (x, y + 20 + (d - 3) * 32, w, 28), text, d == dimensionCount)) {
+				SetDifficulty (d, setSize);
+			}
+		}
+	}
+
+	void DrawSizeButtons (float x, float y, float w)
+	{
+		GUI.Label (new Rect (x, y, w, 18), "Kaarten per set", UiStyle.LabelStyle);
+		for (int s = 3; s <= 4; s++) {
+			string text = s + " kaarten +" + SetLogic.PointsPerSet (dimensionCount, s);
+			if (MenuButton (new Rect (x, y + 20 + (s - 3) * 32, w, 28), text, s == setSize)) {
+				SetDifficulty (dimensionCount, s);
+			}
+		}
+	}
+
+	void DrawMessage (Rect rect)
+	{
+		if (Time.time < messageUntil) {
+			GUI.Label (rect, message, UiStyle.MessageStyle);
+		}
+	}
+
 	void OnGUI ()
 	{
 		UiStyle.EnsureStyles ();
 
-		//the rule of the game, in a banner at the top
-		GUI.Box (new Rect (8, 4, Screen.width - 16, 40), RuleText (), UiStyle.BannerStyle);
+		//draw in GUI units; the matrix scales them to the screen (clicks follow the same matrix)
+		float scale = UiScale ();
+		GUI.matrix = Matrix4x4.Scale (new Vector3 (scale, scale, 1f));
+		float width = Screen.width / scale;
+		float height = Screen.height / scale;
 
-		//menu in a narrow panel on the left, buttons under each other, so it never covers the cards
-		const float x = 10;
-		const float w = 98;
-		const float top = 54;
-		GUI.Box (new Rect (2, top - 6, 112, 372), "", UiStyle.PanelStyle);
-		GUI.Label (new Rect (x, top, w, 18), "Score", UiStyle.LabelStyle);
-		GUI.Label (new Rect (x, top + 15, w, 30), score.ToString (), UiStyle.TitleStyle);
-		GUI.Label (new Rect (x, top + 52, w, 18), "Punten per set", UiStyle.LabelStyle);
-		GUI.Label (new Rect (x, top + 67, w, 30), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), UiStyle.ValueStyle);
-
-		GUI.Label (new Rect (x, top + 108, w, 18), "Eigenschappen", UiStyle.LabelStyle);
-		for (int d = 3; d <= 5; d++) {
-			string text = d + "   +" + SetLogic.PointsPerSet (d, setSize);
-			if (MenuButton (new Rect (x, top + 128 + (d - 3) * 32, w, 28), text, d == dimensionCount)) {
-				SetDifficulty (d, setSize);
-			}
-		}
-
-		GUI.Label (new Rect (x, top + 228, w, 18), "Kaarten per set", UiStyle.LabelStyle);
-		for (int s = 3; s <= 4; s++) {
-			string text = s + " kaarten +" + SetLogic.PointsPerSet (dimensionCount, s);
-			if (MenuButton (new Rect (x, top + 248 + (s - 3) * 32, w, 28), text, s == setSize)) {
-				SetDifficulty (dimensionCount, s);
-			}
-		}
-
-		if (Time.time < messageUntil) {
-			GUI.Label (new Rect (x, top + 320, w, 40), message, UiStyle.MessageStyle);
+		if (Portrait) {
+			//the rule of the game in a banner at the top, the menu in a panel at the bottom
+			GUI.Box (new Rect (4, 4, width - 8, PortraitBannerHeight), RuleText (), UiStyle.BannerStyle);
+			float top = height - PortraitPanelHeight + 8;
+			GUI.Box (new Rect (4, height - PortraitPanelHeight, width - 8, PortraitPanelHeight - 4), "", UiStyle.PanelStyle);
+			float third = (width - 28) / 3f;
+			DrawScore (14, top, third - 8);
+			DrawDimensionButtons (14 + third, top, third - 8);
+			DrawSizeButtons (14 + 2 * third, top, third - 8);
+			DrawMessage (new Rect (14 + 2 * third, top + 88, third - 8, 44));
+		} else {
+			//the rule of the game in a banner at the top, the menu in a narrow panel on the left so it never covers the cards
+			GUI.Box (new Rect (8, 4, width - 16, 40), RuleText (), UiStyle.BannerStyle);
+			const float x = 10;
+			const float w = 98;
+			const float top = 54;
+			GUI.Box (new Rect (2, top - 6, 112, 372), "", UiStyle.PanelStyle);
+			DrawScore (x, top, w);
+			DrawDimensionButtons (x, top + 108, w);
+			DrawSizeButtons (x, top + 228, w);
+			DrawMessage (new Rect (x, top + 320, w, 40));
 		}
 
 		if (gameOver) {
 			float bw = 320;
 			float bh = 170;
-			Rect box = new Rect ((Screen.width - bw) / 2, (Screen.height - bh) / 2, bw, bh);
+			Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);
 			GUI.Box (box, "", UiStyle.PanelStyle);
 			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Spel afgelopen", UiStyle.TitleStyle);
 			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), "Score: " + score, UiStyle.ValueStyle);
 			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Nieuw spel", UiStyle.ActionButtonStyle)) {
 				NewGame ();
 			}
+		}
+	}
+
+	//a turned phone or a resized window: lay the table out again
+	void Update ()
+	{
+		if (Screen.width != layoutWidth || Screen.height != layoutHeight) {
+			ApplyLayout ();
 		}
 	}
 
@@ -360,21 +426,9 @@ public class DeckView : MonoBehaviour
 
 	void ShowCards ()
 	{
-		int columns = SetLogic.BoardColumns (dimensionCount, setSize);
-		int rows = (boardSize + columns - 1) / columns;
-
 		for (int slot = 0; slot < boardSize; slot++) {
-			int coordx = slot % columns;
-			int coordy = slot / columns;
-
-			//center a smaller board in the space of the full 9 x 4 board
-			float cox = cardOffsetx * (coordx + (9 - columns) / 2f);
-			float coy = cardOffsety * (coordy + (4 - rows) / 2f);
-
 			GameObject cardCopy = (GameObject)Instantiate (cardPrefab); //creat a copy of "cardPrefab"
 			cardCopy.SetActive (true); //the template is inactive, so is its copy
-			Vector3 temp = start + new Vector3 (cox, coy); //tempory position startposition + offset times current card
-			cardCopy.transform.position = temp;
 
 			CardModel cardModel = cardCopy.GetComponent<CardModel> ();
 			cardModel.cardIndex = shownCardIndex [slot];
@@ -390,6 +444,47 @@ public class DeckView : MonoBehaviour
 				slots [slot].AddFound (UiStyle.FoundColor (i));
 			}
 		}
+		ApplyLayout ();
+	}
+
+	int layoutWidth, layoutHeight;
+
+	//put the cards in a grid and zoom the camera so the whole grid fits in the space the menu leaves free.
+	//Held upright (portrait) the grid is turned: as many rows as the wide table has columns.
+	void ApplyLayout ()
+	{
+		layoutWidth = Screen.width;
+		layoutHeight = Screen.height;
+		Camera cam = Camera.main;
+		if (slots [0] == null || cam == null || Screen.width == 0 || Screen.height == 0) {
+			return;
+		}
+
+		int wideColumns = SetLogic.BoardColumns (dimensionCount, setSize);
+		int columns = Portrait ? (boardSize + wideColumns - 1) / wideColumns : wideColumns;
+		int rows = (boardSize + columns - 1) / columns;
+		float cellWidth = Mathf.Abs (cardOffsetx);
+		float cellHeight = Mathf.Abs (cardOffsety);
+
+		//the grid is centered on the world origin
+		for (int slot = 0; slot < boardSize; slot++) {
+			float x = (slot % columns - (columns - 1) / 2f) * cellWidth;
+			float y = ((rows - 1) / 2f - slot / columns) * cellHeight;
+			slots [slot].transform.position = new Vector3 (x, y, 0f);
+		}
+
+		//zoom so the grid fills the free space, but not far bigger than the original size on a small table
+		float scale = UiScale ();
+		Rect field = Playfield (Screen.width / scale, Screen.height / scale);
+		float pixelsPerUnit = Mathf.Min (field.width * scale / (columns * cellWidth), field.height * scale / (rows * cellHeight));
+		pixelsPerUnit = Mathf.Min (pixelsPerUnit, Screen.height / 40f * 1.6f);
+		cam.orthographicSize = Screen.height / (2f * pixelsPerUnit);
+
+		//move the camera so the middle of the grid lies in the middle of the free space
+		float centerX = (field.x + field.width / 2f) * scale; //pixels from the left
+		float centerY = Screen.height - (field.y + field.height / 2f) * scale; //pixels from the bottom
+		cam.transform.position = new Vector3 ((Screen.width / 2f - centerX) / pixelsPerUnit,
+			(Screen.height / 2f - centerY) / pixelsPerUnit, cam.transform.position.z);
 	}
 
 	//change the difficulty; the table of that difficulty stays as the player left it
