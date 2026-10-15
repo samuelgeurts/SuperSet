@@ -34,13 +34,11 @@ public class CardModel : MonoBehaviour {
 		//1 to 4 marks under each other, in the color, shape, fill and size of the card
 		int[] dimension = SetLogic.IndexToDimension (cardIndex);
 		int count = dimension [2] + 1;
-		Sprite sprite = CardArt.MarkSprite (dimension [1], dimension [3], dimension [0]);
-		Vector2 size = CardArt.MarkScale (dimension [4]);
+		Sprite sprite = CardArt.MarkSprite (dimension [1], dimension [3], dimension [0], dimension [4]);
 		for (int i = 0; i < count; i++) {
 			GameObject mark = new GameObject ("Mark");
 			mark.transform.SetParent (transform, false);
 			mark.transform.localPosition = new Vector3 (0f, ((count - 1) / 2f - i) * CardArt.MarkSpacing, 0f);
-			mark.transform.localScale = new Vector3 (size.x, size.y, 1f);
 			SpriteRenderer renderer = mark.AddComponent<SpriteRenderer> ();
 			renderer.sprite = sprite;
 			renderer.sortingLayerID = spriteRenderer.sortingLayerID;

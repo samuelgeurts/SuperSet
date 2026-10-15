@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 //draws the cards in code, so no image per card is needed: a white card with 1 to 4 marks.
-//A mark has a shape, a fill and a color; its size (scale) is set on the mark itself.
+//A mark has a shape, a fill, a color and a size (scale). The size is drawn into the mark itself,
+//so the lines of the fill keep the same distance on every size.
 //The dimensions follow SetLogic.IndexToDimension: color, shape, number, structure (fill), scale.
 public static class CardArt
 {
@@ -12,17 +13,16 @@ public static class CardArt
 	const float CardPixelsPerUnit = 84f;
 	static readonly Color32 CardBorder = new Color32 (129, 130, 133, 255);
 
-	//a mark: shape coordinates run from -1 to 1 in x; the texture holds them with a small margin
-	const int MarkWidth = 256;
-	const int MarkHeight = 128;
-	const float MarkTexelsPerUnit = MarkWidth / 2.1f;
-	const float MarkPixelsPerUnit = 100f; //a mark of the normal size is 0.64 of the card wide
+	//shape coordinates are in units of 51 card pixels (a normal mark is 2 units wide); this is the size of a unit
+	const float UnitInCard = 51f / 42f;
+	const float TexelsPerUnit = 120f;
+	const float MarkPixelsPerUnit = TexelsPerUnit / UnitInCard;
 	const float LineWidth = 3.5f; //in mark texels
-	const float HatchPeriod = 8f;
+	const float HatchPeriod = 16f; //distance between the lines of a fill, in mark texels; the same for every size
 	const float HatchWidth = 3f;
 
 	//distance between the marks of a card, in card units
-	public const float MarkSpacing = 1.14f;
+	public const float MarkSpacing = 48f / 42f;
 
 	static readonly Color32[] colors = {
 		new Color32 (15, 117, 188, 255), //blue
@@ -31,18 +31,13 @@ public static class CardArt
 		new Color32 (59, 181, 74, 255), //green
 	};
 
-	//size of a mark per scale: normal, small, wide, narrow and tall
+	//width and height of a mark per scale, compared with the normal mark
 	static readonly Vector2[] markScales = {
 		new Vector2 (1f, 1f),
-		new Vector2 (0.5f, 0.5f),
-		new Vector2 (1.5f, 1.1f),
-		new Vector2 (0.8f, 1.2f),
+		new Vector2 (0.5f, 0.79f),
+		new Vector2 (1.49f, 1.26f),
+		new Vector2 (0.78f, 1.32f),
 	};
-
-	public static Vector2 MarkScale (int scale)
-	{
-		return markScales [scale];
-	}
 
 	static Sprite cardSprite;
 
@@ -94,46 +89,27 @@ public static class CardArt
 		return Sprite.Create (texture, new Rect (0, 0, width, height), new Vector2 (0.5f, 0.5f), pixelsPerUnit, 0, SpriteMeshType.FullRect);
 	}
 
-	//outline of a shape as a closed polygon
-	static Vector2[] ShapeOutline (int shape)
+	//outlines of the shapes (cloud, bolt, star, lens) as x, y pairs around the middle of the mark, traced from the card design
+	static readonly float[][] outlines = {
+		//cloud
+		new float[] { 0.995f, 0.015f, 0.941f, 0.078f, 0.902f, 0.098f, 0.809f, 0.127f, 0.794f, 0.123f, 0.760f, 0.137f, 0.711f, 0.137f, 0.701f, 0.147f, 0.701f, 0.211f, 0.676f, 0.255f, 0.598f, 0.314f, 0.515f, 0.343f, 0.500f, 0.338f, 0.480f, 0.353f, 0.436f, 0.353f, 0.417f, 0.363f, 0.382f, 0.358f, 0.348f, 0.373f, 0.137f, 0.373f, 0.103f, 0.358f, 0.069f, 0.363f, 0.049f, 0.353f, 0.005f, 0.353f, -0.015f, 0.338f, -0.029f, 0.343f, -0.162f, 0.294f, -0.191f, 0.275f, -0.275f, 0.275f, -0.289f, 0.284f, -0.539f, 0.284f, -0.618f, 0.265f, -0.696f, 0.221f, -0.750f, 0.142f, -0.799f, 0.137f, -0.819f, 0.123f, -0.833f, 0.127f, -0.848f, 0.118f, -0.882f, 0.118f, -0.966f, 0.078f, -0.995f, 0.034f, -1.000f, -0.010f, -0.946f, -0.074f, -0.907f, -0.093f, -0.814f, -0.123f, -0.799f, -0.118f, -0.765f, -0.132f, -0.716f, -0.132f, -0.706f, -0.142f, -0.706f, -0.206f, -0.681f, -0.250f, -0.603f, -0.309f, -0.520f, -0.338f, -0.505f, -0.333f, -0.485f, -0.348f, -0.441f, -0.348f, -0.422f, -0.358f, -0.387f, -0.353f, -0.353f, -0.368f, -0.142f, -0.368f, -0.108f, -0.353f, -0.074f, -0.358f, -0.054f, -0.348f, -0.010f, -0.348f, 0.010f, -0.333f, 0.025f, -0.338f, 0.157f, -0.289f, 0.186f, -0.270f, 0.270f, -0.270f, 0.284f, -0.279f, 0.534f, -0.279f, 0.613f, -0.260f, 0.691f, -0.216f, 0.745f, -0.137f, 0.794f, -0.132f, 0.814f, -0.118f, 0.828f, -0.123f, 0.843f, -0.113f, 0.877f, -0.113f, 0.961f, -0.074f, 0.990f, -0.029f },
+		//bolt
+		new float[] { -0.980f, 0.402f, -0.980f, 0.191f, -0.971f, 0.181f, -0.931f, 0.181f, -0.907f, 0.172f, -0.877f, 0.176f, -0.853f, 0.162f, -0.804f, 0.167f, -0.775f, 0.152f, -0.735f, 0.157f, -0.701f, 0.142f, -0.667f, 0.147f, -0.637f, 0.132f, -0.583f, 0.137f, -0.559f, 0.123f, -0.500f, 0.123f, -0.475f, 0.113f, -0.446f, 0.118f, -0.422f, 0.103f, -0.373f, 0.108f, -0.343f, 0.093f, -0.304f, 0.098f, -0.270f, 0.083f, -0.235f, 0.088f, -0.206f, 0.074f, -0.147f, 0.078f, -0.137f, 0.049f, -0.230f, -0.088f, -0.319f, -0.245f, -0.275f, -0.245f, -0.245f, -0.260f, -0.191f, -0.255f, -0.167f, -0.270f, -0.118f, -0.265f, -0.088f, -0.279f, -0.034f, -0.275f, -0.010f, -0.289f, 0.069f, -0.289f, 0.093f, -0.299f, 0.127f, -0.294f, 0.162f, -0.309f, 0.225f, -0.309f, 0.250f, -0.319f, 0.284f, -0.314f, 0.319f, -0.328f, 0.373f, -0.324f, 0.402f, -0.338f, 0.456f, -0.333f, 0.480f, -0.348f, 0.529f, -0.343f, 0.559f, -0.358f, 0.613f, -0.353f, 0.637f, -0.368f, 0.716f, -0.368f, 0.740f, -0.377f, 0.775f, -0.373f, 0.809f, -0.387f, 0.873f, -0.387f, 0.897f, -0.397f, 0.931f, -0.392f, 0.966f, -0.407f, 1.005f, -0.407f, 1.015f, -0.397f, 1.015f, -0.186f, 1.005f, -0.176f, 0.966f, -0.176f, 0.941f, -0.167f, 0.912f, -0.172f, 0.887f, -0.157f, 0.838f, -0.162f, 0.809f, -0.147f, 0.770f, -0.152f, 0.735f, -0.137f, 0.701f, -0.142f, 0.672f, -0.127f, 0.618f, -0.132f, 0.593f, -0.118f, 0.534f, -0.118f, 0.510f, -0.108f, 0.480f, -0.113f, 0.456f, -0.098f, 0.407f, -0.103f, 0.377f, -0.088f, 0.338f, -0.093f, 0.304f, -0.078f, 0.270f, -0.083f, 0.240f, -0.069f, 0.181f, -0.074f, 0.172f, -0.044f, 0.265f, 0.093f, 0.353f, 0.250f, 0.309f, 0.250f, 0.279f, 0.265f, 0.225f, 0.260f, 0.201f, 0.275f, 0.152f, 0.270f, 0.123f, 0.284f, 0.069f, 0.279f, 0.044f, 0.294f, -0.034f, 0.294f, -0.059f, 0.304f, -0.093f, 0.299f, -0.127f, 0.314f, -0.191f, 0.314f, -0.216f, 0.324f, -0.250f, 0.319f, -0.284f, 0.333f, -0.338f, 0.328f, -0.368f, 0.343f, -0.422f, 0.338f, -0.446f, 0.353f, -0.495f, 0.348f, -0.525f, 0.363f, -0.578f, 0.358f, -0.603f, 0.373f, -0.681f, 0.373f, -0.706f, 0.382f, -0.740f, 0.377f, -0.775f, 0.392f, -0.838f, 0.392f, -0.863f, 0.402f, -0.897f, 0.397f, -0.931f, 0.412f, -0.971f, 0.412f },
+		//star
+		new float[] { -1.029f, 0.005f, -1.010f, -0.015f, -0.912f, -0.020f, -0.877f, -0.034f, -0.833f, -0.034f, -0.779f, -0.054f, -0.745f, -0.054f, -0.735f, -0.064f, -0.672f, -0.074f, -0.618f, -0.103f, -0.578f, -0.113f, -0.529f, -0.147f, -0.471f, -0.201f, -0.471f, -0.284f, -0.534f, -0.382f, -0.515f, -0.382f, -0.456f, -0.348f, -0.407f, -0.338f, -0.338f, -0.309f, -0.309f, -0.309f, -0.284f, -0.294f, -0.270f, -0.299f, -0.260f, -0.289f, -0.225f, -0.289f, -0.191f, -0.275f, 0.078f, -0.265f, 0.108f, -0.279f, 0.162f, -0.275f, 0.186f, -0.289f, 0.260f, -0.294f, 0.324f, -0.319f, 0.338f, -0.314f, 0.529f, -0.382f, 0.466f, -0.294f, 0.451f, -0.245f, 0.466f, -0.201f, 0.510f, -0.152f, 0.574f, -0.113f, 0.657f, -0.078f, 0.672f, -0.083f, 0.809f, -0.039f, 0.828f, -0.044f, 0.838f, -0.034f, 0.873f, -0.034f, 0.907f, -0.020f, 1.005f, -0.015f, 1.025f, 0.000f, 1.005f, 0.020f, 0.907f, 0.025f, 0.873f, 0.039f, 0.828f, 0.039f, 0.775f, 0.059f, 0.740f, 0.059f, 0.730f, 0.069f, 0.667f, 0.078f, 0.613f, 0.108f, 0.574f, 0.118f, 0.525f, 0.152f, 0.466f, 0.206f, 0.466f, 0.289f, 0.529f, 0.387f, 0.510f, 0.387f, 0.451f, 0.353f, 0.402f, 0.343f, 0.333f, 0.314f, 0.304f, 0.314f, 0.279f, 0.299f, 0.265f, 0.304f, 0.255f, 0.294f, 0.221f, 0.294f, 0.186f, 0.279f, -0.083f, 0.270f, -0.113f, 0.284f, -0.167f, 0.279f, -0.191f, 0.294f, -0.265f, 0.299f, -0.328f, 0.324f, -0.343f, 0.319f, -0.534f, 0.387f, -0.471f, 0.299f, -0.456f, 0.250f, -0.471f, 0.206f, -0.515f, 0.157f, -0.578f, 0.118f, -0.662f, 0.083f, -0.676f, 0.088f, -0.814f, 0.044f, -0.833f, 0.049f, -0.843f, 0.039f, -0.877f, 0.039f, -0.912f, 0.025f, -1.010f, 0.020f },
+		//lens
+		new float[] { -1.000f, -0.005f, -1.000f, -0.025f, -0.848f, -0.127f, -0.672f, -0.225f, -0.422f, -0.319f, -0.328f, -0.333f, -0.304f, -0.348f, -0.206f, -0.353f, -0.172f, -0.368f, 0.123f, -0.368f, 0.147f, -0.353f, 0.201f, -0.358f, 0.211f, -0.348f, 0.338f, -0.328f, 0.363f, -0.314f, 0.377f, -0.319f, 0.632f, -0.225f, 0.828f, -0.127f, 0.956f, -0.049f, 0.966f, -0.034f, 0.985f, -0.034f, 0.995f, -0.025f, 0.985f, 0.015f, 0.946f, 0.020f, 0.936f, 0.034f, 0.765f, 0.152f, 0.574f, 0.250f, 0.544f, 0.255f, 0.515f, 0.275f, 0.490f, 0.275f, 0.436f, 0.304f, 0.422f, 0.299f, 0.397f, 0.314f, 0.265f, 0.338f, 0.240f, 0.353f, -0.118f, 0.363f, -0.157f, 0.348f, -0.191f, 0.353f, -0.225f, 0.338f, -0.245f, 0.343f, -0.255f, 0.333f, -0.289f, 0.333f, -0.333f, 0.314f, -0.363f, 0.314f, -0.397f, 0.294f, -0.480f, 0.275f, -0.559f, 0.235f, -0.593f, 0.230f, -0.608f, 0.216f, -0.750f, 0.152f, -0.951f, 0.020f, -0.990f, 0.015f },
+	};
+
+	//the outline of a shape in the size of a scale, as texel coordinates around the middle of the mark
+	static Vector2[] ScaledOutline (int shape, int scale)
 	{
-		List<Vector2> p = new List<Vector2> ();
-		switch (shape) {
-		case 0: //cloud: an oval with a scalloped edge
-			for (int i = 0; i < 84; i++) {
-				float t = 2f * Mathf.PI * i / 84f;
-				float bump = Mathf.Abs (Mathf.Cos (3.5f * t));
-				p.Add (new Vector2 (Mathf.Cos (t) * (0.86f + 0.14f * bump), 0.36f * Mathf.Sin (t) * (0.76f + 0.24f * bump)));
-			}
-			break;
-		case 1: //bolt: a slanted zigzag
-			p.Add (new Vector2 (-0.95f, -0.10f));
-			p.Add (new Vector2 (0.05f, 0.29f));
-			p.Add (new Vector2 (0.05f, 0.10f));
-			p.Add (new Vector2 (0.95f, 0.05f));
-			p.Add (new Vector2 (-0.05f, -0.34f));
-			p.Add (new Vector2 (-0.05f, -0.15f));
-			break;
-		case 2: //star: eight points
-			for (int i = 0; i < 16; i++) {
-				float t = Mathf.PI * i / 8f;
-				float r = (i % 2 == 0) ? 1f : 0.52f;
-				p.Add (new Vector2 (r * Mathf.Cos (t), 0.38f * r * Mathf.Sin (t)));
-			}
-			break;
-		default: //lens: two arcs that meet in a point at both ends
-			const int steps = 40;
-			for (int i = 0; i <= steps; i++) {
-				float x = -1f + 2f * i / steps;
-				p.Add (new Vector2 (x, 0.33f * Mathf.Pow (Mathf.Max (0f, 1f - x * x), 0.85f)));
-			}
-			for (int i = steps - 1; i >= 1; i--) {
-				float x = -1f + 2f * i / steps;
-				p.Add (new Vector2 (x, -0.33f * Mathf.Pow (Mathf.Max (0f, 1f - x * x), 0.85f)));
-			}
-			break;
+		float[] flat = outlines [shape];
+		Vector2[] points = new Vector2[flat.Length / 2];
+		for (int i = 0; i < points.Length; i++) {
+			points [i] = new Vector2 (flat [2 * i] * markScales [scale].x * TexelsPerUnit, flat [2 * i + 1] * markScales [scale].y * TexelsPerUnit);
 		}
-		return p.ToArray ();
+		return points;
 	}
 
 	//signed distance from a point to a polygon in texels: positive inside, negative outside
@@ -159,28 +135,8 @@ public static class CardArt
 				best = d;
 			}
 		}
-		float distance = Mathf.Sqrt (best) * MarkTexelsPerUnit;
+		float distance = Mathf.Sqrt (best);
 		return inside ? distance : -distance;
-	}
-
-	//distance field per shape, made once
-	static float[][] fields = new float[4][];
-
-	static float[] Field (int shape)
-	{
-		if (fields [shape] == null) {
-			Vector2[] outline = ShapeOutline (shape);
-			float[] field = new float[MarkWidth * MarkHeight];
-			for (int y = 0; y < MarkHeight; y++) {
-				for (int x = 0; x < MarkWidth; x++) {
-					float ux = (x + 0.5f - MarkWidth / 2f) / MarkTexelsPerUnit;
-					float uy = (y + 0.5f - MarkHeight / 2f) / MarkTexelsPerUnit;
-					field [y * MarkWidth + x] = Distance (outline, ux, uy);
-				}
-			}
-			fields [shape] = field;
-		}
-		return fields [shape];
 	}
 
 	//a thin line pattern: 1 on a line, 0 between, along the coordinate c
@@ -194,18 +150,82 @@ public static class CardArt
 
 	static Dictionary<int, Sprite> markSprites = new Dictionary<int, Sprite> ();
 
-	//fill: 0 solid, 1 diagonal lines, 2 crossed lines, 3 outline only
-	public static Sprite MarkSprite (int shape, int fill, int color)
+	//the distance of every texel of a mark to its outline; shared by all fills and colors of a shape in a size
+	class Field
 	{
-		int key = (shape * 4 + fill) * 4 + color;
+		public int halfWidth, halfHeight;
+		public float[] distance; //width * height
+		public int Width { get { return 2 * halfWidth; } }
+		public int Height { get { return 2 * halfHeight; } }
+	}
+
+	static Dictionary<int, Field> fields = new Dictionary<int, Field> ();
+
+	static Field GetField (int shape, int scale)
+	{
+		int key = shape * 4 + scale;
+		Field field;
+		if (fields.TryGetValue (key, out field)) {
+			return field;
+		}
+		Vector2[] outline = ScaledOutline (shape, scale);
+
+		//a texture just big enough for the outline, with the middle of the shape in the middle of the texture
+		float reachX = 0f;
+		float reachY = 0f;
+		foreach (Vector2 point in outline) {
+			reachX = Mathf.Max (reachX, Mathf.Abs (point.x));
+			reachY = Mathf.Max (reachY, Mathf.Abs (point.y));
+		}
+		field = new Field ();
+		field.halfWidth = Mathf.CeilToInt (reachX) + 4;
+		field.halfHeight = Mathf.CeilToInt (reachY) + 4;
+		int width = field.Width;
+		int height = field.Height;
+
+		//the distance is measured on every second texel, which is much faster, and smoothed in between
+		int gridWidth = width / 2 + 2;
+		int gridHeight = height / 2 + 2;
+		float[] grid = new float[gridWidth * gridHeight];
+		for (int j = 0; j < gridHeight; j++) {
+			for (int i = 0; i < gridWidth; i++) {
+				grid [j * gridWidth + i] = Distance (outline, 2 * i - field.halfWidth, 2 * j - field.halfHeight);
+			}
+		}
+		field.distance = new float[width * height];
+		for (int y = 0; y < height; y++) {
+			float gy = (y + 0.5f) / 2f;
+			int j = (int)gy;
+			float fy = gy - j;
+			for (int x = 0; x < width; x++) {
+				float gx = (x + 0.5f) / 2f;
+				int i = (int)gx;
+				float fx = gx - i;
+				float top = Mathf.Lerp (grid [j * gridWidth + i], grid [j * gridWidth + i + 1], fx);
+				float bottom = Mathf.Lerp (grid [(j + 1) * gridWidth + i], grid [(j + 1) * gridWidth + i + 1], fx);
+				field.distance [y * width + x] = Mathf.Lerp (top, bottom, fy);
+			}
+		}
+		fields [key] = field;
+		return field;
+	}
+
+	//fill: 0 solid, 1 diagonal lines, 2 crossed lines, 3 outline only
+	public static Sprite MarkSprite (int shape, int fill, int color, int scale)
+	{
+		int key = ((shape * 4 + fill) * 4 + color) * 4 + scale;
 		Sprite sprite;
 		if (!markSprites.TryGetValue (key, out sprite)) {
-			float[] field = Field (shape);
+			Field field = GetField (shape, scale);
+			int width = field.Width;
+			int height = field.Height;
 			Color32 rgb = colors [color];
-			Color32[] pixels = new Color32[MarkWidth * MarkHeight];
-			for (int y = 0; y < MarkHeight; y++) {
-				for (int x = 0; x < MarkWidth; x++) {
-					float d = field [y * MarkWidth + x];
+			Color32[] pixels = new Color32[width * height];
+			for (int y = 0; y < height; y++) {
+				for (int x = 0; x < width; x++) {
+					float ux = x + 0.5f - field.halfWidth;
+					float uy = y + 0.5f - field.halfHeight;
+					float d = field.distance [y * width + x];
 					float cover = Clamp01 (d + 0.5f);
 					float ring = cover * Clamp01 (LineWidth - d + 0.5f);
 					float alpha;
@@ -214,17 +234,18 @@ public static class CardArt
 					} else if (fill == 3) {
 						alpha = ring;
 					} else {
-						float lines = Stripe ((x + y) * 0.7071f);
+						//the lines run through the middle of the mark, so every mark has the same pattern
+						float lines = Stripe ((ux + uy) * 0.7071f);
 						if (fill == 2) {
-							lines = Mathf.Max (lines, Stripe ((x - y) * 0.7071f));
+							lines = Mathf.Max (lines, Stripe ((ux - uy) * 0.7071f));
 						}
 						alpha = Mathf.Max (ring, cover * lines);
 					}
 					rgb.a = (byte)(alpha * 255f);
-					pixels [y * MarkWidth + x] = rgb;
+					pixels [y * width + x] = rgb;
 				}
 			}
-			sprite = MakeSprite (pixels, MarkWidth, MarkHeight, MarkPixelsPerUnit);
+			sprite = MakeSprite (pixels, width, height, MarkPixelsPerUnit);
 			markSprites [key] = sprite;
 		}
 		return sprite;
