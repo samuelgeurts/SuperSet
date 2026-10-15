@@ -9,18 +9,43 @@ public class CardModel : MonoBehaviour {
 	//[SerializeField] private string targetMessage;
 
 	public Color highlightColor = Color.cyan;
-	public Sprite[] faces;
 	public Sprite cardBack;
 
 	//private Color highlightColor = new Color(1.0f,1.0f,0.9f,0.7f);
-	public int cardIndex; //public face of our card model e.g faces[cardIndex]
+	public int cardIndex; //the card: its dimensions say what is drawn (see CardArt)
+
+	List<GameObject> marks = new List<GameObject> (); //the shapes on the face of the card
 
 	public void ToggleFace(bool showFace)
 	{
-		if (showFace) {
-			spriteRenderer.sprite = faces [cardIndex];
-		} else {
+		if (spriteRenderer == null) {
+			spriteRenderer = GetComponent<SpriteRenderer>(); //not set yet when the card is made outside play mode
+		}
+		foreach (GameObject mark in marks) {
+			Destroy (mark);
+		}
+		marks.Clear ();
+		if (!showFace) {
 			spriteRenderer.sprite = cardBack;
+			return;
+		}
+		spriteRenderer.sprite = CardArt.CardSprite;
+
+		//1 to 4 marks under each other, in the color, shape, fill and size of the card
+		int[] dimension = SetLogic.IndexToDimension (cardIndex);
+		int count = dimension [2] + 1;
+		Sprite sprite = CardArt.MarkSprite (dimension [1], dimension [3], dimension [0]);
+		Vector2 size = CardArt.MarkScale (dimension [4]);
+		for (int i = 0; i < count; i++) {
+			GameObject mark = new GameObject ("Mark");
+			mark.transform.SetParent (transform, false);
+			mark.transform.localPosition = new Vector3 (0f, ((count - 1) / 2f - i) * CardArt.MarkSpacing, 0f);
+			mark.transform.localScale = new Vector3 (size.x, size.y, 1f);
+			SpriteRenderer renderer = mark.AddComponent<SpriteRenderer> ();
+			renderer.sprite = sprite;
+			renderer.sortingLayerID = spriteRenderer.sortingLayerID;
+			renderer.sortingOrder = spriteRenderer.sortingOrder + 1;
+			marks.Add (mark);
 		}
 	}
 
@@ -29,6 +54,7 @@ public class CardModel : MonoBehaviour {
 	void Awake() {
 		spriteRenderer = GetComponent<SpriteRenderer>(); //angle brackets specify the type
 		baseScale = transform.localScale;
+		spriteRenderer.sprite = CardArt.CardSprite;
 		FitColliderToSprite ();
 		CreateShadow ();
 	}
@@ -37,7 +63,7 @@ public class CardModel : MonoBehaviour {
 	void FitColliderToSprite ()
 	{
 		BoxCollider2D box = GetComponent<BoxCollider2D> ();
-		Sprite sprite = (faces != null && faces.Length > 0) ? faces [0] : spriteRenderer.sprite;
+		Sprite sprite = spriteRenderer.sprite;
 		if (box != null && sprite != null) {
 			box.size = sprite.bounds.size;
 			box.offset = sprite.bounds.center;
@@ -110,7 +136,7 @@ public class CardModel : MonoBehaviour {
 	//a rounded rectangle behind the card: margin and offset are fractions of the card width
 	GameObject CreateBehind(string objectName, Color color, float margin, Vector2 offset, int order)
 	{
-		Sprite face = (faces != null && faces.Length > 0) ? faces [0] : spriteRenderer.sprite;
+		Sprite face = spriteRenderer.sprite;
 		Vector2 size = face.bounds.size;
 		float m = size.x * margin;
 
