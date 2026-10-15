@@ -35,6 +35,9 @@ public class DeckView : MonoBehaviour
 		if (selectedCards.Remove (card)) {
 			card.SetSelected (false);
 		} else if (selectedCards.Count < setSize) {
+			if (ruleOpen) {
+				SetRuleOpen (false);
+			}
 			selectedCards.Add (card);
 			card.SetSelected (true);
 			if (selectedCards.Count == setSize) {
@@ -180,13 +183,37 @@ public class DeckView : MonoBehaviour
 	}
 
 	//the part of the screen for the cards, in GUI units (y from the top): what the menu leaves free
-	static Rect Playfield (float w, float h)
+	Rect Playfield (float w, float h)
 	{
 		if (Portrait) {
-			float top = 4 + PortraitBannerHeight + 4;
+			float top = 4 + (ruleOpen ? PortraitBannerHeight : HelpButtonSize) + 4;
 			return new Rect (4, top, w - 8, h - top - PortraitPanelHeight - 4);
 		}
-		return new Rect (120, 52, w - 124, h - 56);
+		float landscapeTop = ruleOpen ? 52 : 4 + HelpButtonSize + 8;
+		return new Rect (120, landscapeTop, w - 124, h - landscapeTop - 4);
+	}
+
+	//the rule of the game is open at the start; it folds up to a ? button once the player begins
+	bool ruleOpen = true;
+	const float HelpButtonSize = 32;
+
+	void SetRuleOpen (bool open)
+	{
+		ruleOpen = open;
+		ApplyLayout ();
+	}
+
+	//the rule as a banner with a close button, or just the ? button to open it again
+	void DrawRule (float x, float width, float height)
+	{
+		if (ruleOpen) {
+			GUI.Box (new Rect (x, 4, width - HelpButtonSize - 6, height), RuleText (), UiStyle.BannerStyle);
+			if (GUI.Button (new Rect (x + width - HelpButtonSize, 4, HelpButtonSize, HelpButtonSize), "x", UiStyle.ButtonStyle)) {
+				SetRuleOpen (false);
+			}
+		} else if (GUI.Button (new Rect (x, 4, HelpButtonSize, HelpButtonSize), "?", UiStyle.ChosenButtonStyle)) {
+			SetRuleOpen (true);
+		}
 	}
 
 	void DrawScore (float x, float y, float w)
@@ -238,7 +265,7 @@ public class DeckView : MonoBehaviour
 
 		if (Portrait) {
 			//the rule of the game in a banner at the top, the menu in a panel at the bottom
-			GUI.Box (new Rect (4, 4, width - 8, PortraitBannerHeight), RuleText (), UiStyle.BannerStyle);
+			DrawRule (4, width - 8, PortraitBannerHeight);
 			float top = height - PortraitPanelHeight + 8;
 			GUI.Box (new Rect (4, height - PortraitPanelHeight, width - 8, PortraitPanelHeight - 4), "", UiStyle.PanelStyle);
 			float third = (width - 28) / 3f;
@@ -248,7 +275,7 @@ public class DeckView : MonoBehaviour
 			DrawMessage (new Rect (14 + 2 * third, top + 98, third - 8, 44));
 		} else {
 			//the rule of the game in a banner at the top, the menu in a narrow panel on the left so it never covers the cards
-			GUI.Box (new Rect (8, 4, width - 16, 40), RuleText (), UiStyle.BannerStyle);
+			DrawRule (8, width - 16, 40);
 			const float x = 10;
 			const float w = 98;
 			const float top = 54;
