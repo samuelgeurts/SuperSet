@@ -105,8 +105,8 @@ public static class UiStyle
 		BannerStyle.wordWrap = true;
 		BannerStyle.alignment = TextAnchor.MiddleLeft;
 
-		ButtonStyle = MakeButton (Button, ButtonHover, 13);
-		ChosenButtonStyle = MakeButton (Accent, AccentHover, 13);
+		ButtonStyle = MakeButton (Button, ButtonHover, 14);
+		ChosenButtonStyle = MakeButton (Accent, AccentHover, 14);
 		ActionButtonStyle = MakeButton (Accent, AccentHover, 16);
 
 		TitleStyle = new GUIStyle ();
