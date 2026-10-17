@@ -32,6 +32,10 @@ public class DeckView : MonoBehaviour
 		if (gameOver) {
 			return;
 		}
+		if (openMenu != TopMenu.None || menuClosedFrame == Time.frameCount) {
+			CloseMenu (); //a click on a card only closes the open menu
+			return;
+		}
 		if (selectedCards.Remove (card)) {
 			card.SetSelected (false);
 		} else if (selectedCards.Count < setSize) {
@@ -170,32 +174,32 @@ public class DeckView : MonoBehaviour
 		get { return Screen.height > Screen.width; }
 	}
 
-	const float PortraitBannerHeight = 100;
-	const float PortraitPanelHeight = 164;
+	const float BarHeight = 44;
 	const float ButtonHeight = 32;
 	const float ButtonStep = 36;
+	const float HelpButtonSize = 32;
+	const float MessageHeight = 22;
 
 	//size of one GUI unit in screen pixels, so the menu keeps its size relative to the screen on a phone
 	static float UiScale ()
 	{
-		float scale = Portrait ? Screen.width / 360f : Mathf.Min (Screen.width / 700f, Screen.height / 450f);
+		float scale = Portrait ? Screen.width / 360f : Mathf.Min (Screen.width / 640f, Screen.height / 360f);
 		return Mathf.Clamp (scale, 0.5f, 4f);
 	}
 
-	//the part of the screen for the cards, in GUI units (y from the top): what the menu leaves free
-	Rect Playfield (float w, float h)
-	{
-		if (Portrait) {
-			float top = 4 + (ruleOpen ? PortraitBannerHeight : HelpButtonSize) + 4;
-			return new Rect (4, top, w - 8, h - top - PortraitPanelHeight - 4);
-		}
-		float landscapeTop = ruleOpen ? 52 : 4 + HelpButtonSize + 8;
-		return new Rect (120, landscapeTop, w - 124, h - landscapeTop - 4);
+	//the rule of the game is open at the start; it folds up once the player begins, and the ? button opens it again
+	bool ruleOpen = true;
+
+	float RuleHeight {
+		get { return Portrait ? 100 : 40; }
 	}
 
-	//the rule of the game is open at the start; it folds up to a ? button once the player begins
-	bool ruleOpen = true;
-	const float HelpButtonSize = 32;
+	//the part of the screen for the cards, in GUI units (y from the top): what the top bar leaves free
+	Rect Playfield (float w, float h)
+	{
+		float top = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0) + MessageHeight;
+		return new Rect (4, top, w - 8, h - top - 4);
+	}
 
 	void SetRuleOpen (bool open)
 	{
@@ -203,53 +207,144 @@ public class DeckView : MonoBehaviour
 		ApplyLayout ();
 	}
 
-	//the rule as a banner with a close button, or just the ? button to open it again
-	void DrawRule (float x, float width, float height)
+	//the drop-down menus of the top bar: at most one is open
+	enum TopMenu { None, Difficulty, Mode }
+
+	TopMenu openMenu = TopMenu.None;
+	int menuClosedFrame = -1;
+
+	void CloseMenu ()
 	{
-		if (ruleOpen) {
-			GUI.Box (new Rect (x, 4, width - HelpButtonSize - 6, height), RuleText (), UiStyle.BannerStyle);
-			if (GUI.Button (new Rect (x + width - HelpButtonSize, 4, HelpButtonSize, HelpButtonSize), "x", UiStyle.ButtonStyle)) {
-				SetRuleOpen (false);
-			}
-		} else if (GUI.Button (new Rect (x, 4, HelpButtonSize, HelpButtonSize), "?", UiStyle.ChosenButtonStyle)) {
-			SetRuleOpen (true);
+		openMenu = TopMenu.None;
+		menuClosedFrame = Time.frameCount;
+	}
+
+	//one word for how hard a game is, by the points it gives: more attributes and more cards per set are harder
+	static string DifficultyName (int dimensions, int size)
+	{
+		string[,] names = {
+			{ "Easy", "Medium" },
+			{ "Hard", "Expert" },
+			{ "Master", "Extreme" }
+		};
+		return names [dimensions - 3, size - 3];
+	}
+
+	//a small white square, drawn in a color; used for icons
+	static void DrawSquare (Rect rect, Color color)
+	{
+		Color old = GUI.color;
+		GUI.color = color;
+		GUI.DrawTexture (rect, Texture2D.whiteTexture);
+		GUI.color = old;
+	}
+
+	//the top bar: ? and the score on the left, the difficulty in the middle, the game mode on the right
+	void DrawTopBar (float width)
+	{
+		GUI.Box (new Rect (0, 0, width, BarHeight), "", UiStyle.BarStyle);
+
+		//left: the rule and the score
+		if (GUI.Button (new Rect (8, 6, HelpButtonSize, ButtonHeight), "?", ruleOpen ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle)) {
+			SetRuleOpen (!ruleOpen);
+		}
+		GUI.Label (new Rect (48, 4, 70, 14), "Score", UiStyle.LabelStyle);
+		GUI.Label (new Rect (48, 17, 90, 24), score.ToString (), UiStyle.ScoreStyle16);
+
+		//middle: the difficulty
+		float diffWidth = Portrait ? 124 : 300;
+		Rect diffRect = new Rect ((width - diffWidth) / 2, 6, diffWidth, ButtonHeight);
+		string diffText = DifficultyName (dimensionCount, setSize) + (Portrait ? "  " + dimensionCount + "·" + setSize : "  ·  " + dimensionCount + " attributes  ·  " + setSize + " cards");
+		if (GUI.Button (diffRect, diffText, openMenu == TopMenu.Difficulty ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle)) {
+			bool wasOpen = openMenu == TopMenu.Difficulty;
+			openMenu = wasOpen ? TopMenu.None : TopMenu.Difficulty;
+		}
+		GUI.DrawTexture (new Rect (diffRect.xMax - 18, diffRect.y + 11, 10, 10), UiStyle.Chevron);
+
+		//right: the game mode; there is room next to it for an account later
+		Rect modeRect = new Rect (width - 8 - ButtonHeight, 6, ButtonHeight, ButtonHeight);
+		if (GUI.Button (modeRect, "", openMenu == TopMenu.Mode ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle)) {
+			openMenu = openMenu == TopMenu.Mode ? TopMenu.None : TopMenu.Mode;
+		}
+		for (int i = 0; i < 4; i++) {
+			DrawSquare (new Rect (modeRect.x + 8 + (i % 2) * 9, modeRect.y + 8 + (i / 2) * 9, 7, 7), Color.white);
 		}
 	}
 
-	void DrawScore (float x, float y, float w)
+	//the open drop-down menu; a click outside it closes it
+	void DrawTopMenu (float width)
 	{
-		GUI.Label (new Rect (x, y, w, 18), "Score", UiStyle.LabelStyle);
-		GUI.Label (new Rect (x, y + 15, w, 30), score.ToString (), UiStyle.TitleStyle);
-		GUI.Label (new Rect (x, y + 52, w, 18), "Points per set", UiStyle.LabelStyle);
-		GUI.Label (new Rect (x, y + 67, w, 30), "+" + SetLogic.PointsPerSet (dimensionCount, setSize), UiStyle.ValueStyle);
-	}
+		if (openMenu == TopMenu.None) {
+			return;
+		}
+		Rect panel;
+		if (openMenu == TopMenu.Difficulty) {
+			float w = 230;
+			panel = new Rect ((width - w) / 2, BarHeight + 2, w, 252);
+		} else {
+			float w = 210;
+			panel = new Rect (width - 8 - w, BarHeight + 2, w, 188);
+		}
 
-	void DrawDimensionButtons (float x, float y, float w)
-	{
-		GUI.Label (new Rect (x, y, w, 18), "Attributes", UiStyle.LabelStyle);
-		for (int d = 3; d <= 5; d++) {
-			string text = d + "   +" + SetLogic.PointsPerSet (d, setSize);
-			if (MenuButton (new Rect (x, y + 20 + (d - 3) * ButtonStep, w, ButtonHeight), text, d == dimensionCount)) {
-				SetDifficulty (d, setSize);
+		//a click outside the menu and the two buttons closes it
+		Event e = Event.current;
+		if (e.type == EventType.MouseDown && !panel.Contains (e.mousePosition) && e.mousePosition.y > BarHeight) {
+			CloseMenu ();
+			return;
+		}
+
+		GUI.Box (panel, "", UiStyle.MenuPanelStyle);
+		float x = panel.x + 10;
+		float y = panel.y + 8;
+		float w2 = panel.width - 20;
+		if (openMenu == TopMenu.Difficulty) {
+			GUI.Label (new Rect (x, y, w2, 18), "Attributes", UiStyle.LabelStyle);
+			for (int d = 3; d <= 5; d++) {
+				if (MenuButton (new Rect (x, y + 20 + (d - 3) * ButtonStep, w2, ButtonHeight), d + "   +" + SetLogic.PointsPerSet (d, setSize) + " per set", d == dimensionCount)) {
+					SetDifficulty (d, setSize);
+					CloseMenu ();
+					return;
+				}
 			}
+			y += 20 + 3 * ButtonStep + 4;
+			GUI.Label (new Rect (x, y, w2, 18), "Cards per set", UiStyle.LabelStyle);
+			for (int s = 3; s <= 4; s++) {
+				if (MenuButton (new Rect (x, y + 20 + (s - 3) * ButtonStep, w2, ButtonHeight), s + " cards   +" + SetLogic.PointsPerSet (dimensionCount, s), s == setSize)) {
+					SetDifficulty (dimensionCount, s);
+					CloseMenu ();
+					return;
+				}
+			}
+		} else {
+			GUI.Label (new Rect (x, y, w2, 18), "Game mode", UiStyle.LabelStyle);
+			MenuButton (new Rect (x, y + 20, w2, ButtonHeight), "Classic", true);
+			string[] soon = { "Adventure", "Family board", "Online" };
+			GUI.enabled = false;
+			for (int i = 0; i < soon.Length; i++) {
+				GUI.Button (new Rect (x, y + 20 + (i + 1) * ButtonStep, w2, ButtonHeight), soon [i] + "  (soon)", UiStyle.ButtonStyle);
+			}
+			GUI.enabled = true;
 		}
 	}
 
-	void DrawSizeButtons (float x, float y, float w)
+	//the rule of the game in a banner under the top bar, with a button to close it
+	void DrawRule (float width)
 	{
-		GUI.Label (new Rect (x, y, w, 18), "Cards per set", UiStyle.LabelStyle);
-		for (int s = 3; s <= 4; s++) {
-			string text = s + " cards +" + SetLogic.PointsPerSet (dimensionCount, s);
-			if (MenuButton (new Rect (x, y + 20 + (s - 3) * ButtonStep, w, ButtonHeight), text, s == setSize)) {
-				SetDifficulty (dimensionCount, s);
-			}
+		if (!ruleOpen) {
+			return;
+		}
+		float y = BarHeight + 4;
+		GUI.Box (new Rect (8, y, width - 16 - HelpButtonSize - 6, RuleHeight), RuleText (), UiStyle.BannerStyle);
+		if (GUI.Button (new Rect (width - 8 - HelpButtonSize, y, HelpButtonSize, HelpButtonSize), "x", UiStyle.ButtonStyle)) {
+			SetRuleOpen (false);
 		}
 	}
 
-	void DrawMessage (Rect rect)
+	void DrawMessage (float width)
 	{
 		if (Time.time < messageUntil) {
-			GUI.Label (rect, message, UiStyle.MessageStyle);
+			float y = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0);
+			GUI.Label (new Rect (8, y, width - 16, MessageHeight), message, UiStyle.MessageCenteredStyle);
 		}
 	}
 
@@ -263,31 +358,13 @@ public class DeckView : MonoBehaviour
 		float width = Screen.width / scale;
 		float height = Screen.height / scale;
 
-		if (Portrait) {
-			//the rule of the game in a banner at the top, the menu in a panel at the bottom
-			DrawRule (4, width - 8, PortraitBannerHeight);
-			float top = height - PortraitPanelHeight + 8;
-			GUI.Box (new Rect (4, height - PortraitPanelHeight, width - 8, PortraitPanelHeight - 4), "", UiStyle.PanelStyle);
-			float third = (width - 28) / 3f;
-			DrawScore (14, top, third - 8);
-			DrawDimensionButtons (14 + third, top, third - 8);
-			DrawSizeButtons (14 + 2 * third, top, third - 8);
-			DrawMessage (new Rect (14 + 2 * third, top + 98, third - 8, 44));
-		} else {
-			//the rule of the game in a banner at the top, the menu in a narrow panel on the left so it never covers the cards
-			DrawRule (8, width - 16, 40);
-			const float x = 10;
-			const float w = 98;
-			const float top = 54;
-			GUI.Box (new Rect (2, top - 6, 112, 392), "", UiStyle.PanelStyle);
-			DrawScore (x, top, w);
-			DrawDimensionButtons (x, top + 104, w);
-			DrawSizeButtons (x, top + 240, w);
-			DrawMessage (new Rect (x, top + 338, w, 40));
-		}
+		DrawRule (width);
+		DrawMessage (width);
+		DrawTopBar (width);
+		DrawTopMenu (width);
 
 		if (gameOver) {
-			float bw = 320;
+			float bw = Mathf.Min (320f, width - 16f);
 			float bh = 170;
 			Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);
 			GUI.Box (box, "", UiStyle.PanelStyle);
