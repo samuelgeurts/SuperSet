@@ -18,3 +18,6 @@ werkafspraken in `~/.claude/CLAUDE.md`.
   liever via code of door de gebruiker in de editor.
 - **Hoofdscène:** `Assets/Scenes/Card Deck Test.unity`.
 - **GitHub-project:** https://github.com/users/samuelgeurts/projects/7 (repo `samuelgeurts/SuperSet`).
+- **Wachten op builds:** een Unity-build duurt 10 tot 15 minuten. Start hem met
+  `run_in_background` en wacht op de melding in plaats van te pollen met `sleep`-lussen
+  (elke aanroep kost context). Eén korte tussenstand bij de start is genoeg.
