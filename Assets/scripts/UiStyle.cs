@@ -66,6 +66,46 @@ public static class UiStyle
 		return roundedSprite;
 	}
 
+	static Texture2D FlatTexture (Color color)
+	{
+		Texture2D texture = new Texture2D (2, 2, TextureFormat.RGBA32, false);
+		texture.SetPixels (new Color[] { color, color, color, color });
+		texture.Apply ();
+		return texture;
+	}
+
+	static Texture2D chevron;
+
+	//a small white triangle pointing down, for drop-down buttons
+	public static Texture2D Chevron {
+		get {
+			if (chevron == null) {
+				const int size = 32;
+				chevron = new Texture2D (size, size, TextureFormat.RGBA32, false);
+				chevron.filterMode = FilterMode.Bilinear;
+				for (int y = 0; y < size; y++) {
+					for (int x = 0; x < size; x++) {
+						//the triangle: wide at the top (y = 24) and a point at the bottom (y = 6)
+						int hits = 0;
+						for (int sy = 0; sy < 4; sy++) {
+							for (int sx = 0; sx < 4; sx++) {
+								float px = x + (sx + 0.5f) / 4f;
+								float py = y + (sy + 0.5f) / 4f;
+								float half = (py - 6f) / 18f * 12f; //half the width at this height
+								if (py >= 6f && py <= 24f && Mathf.Abs (px - size / 2f) <= half) {
+									hits++;
+								}
+							}
+						}
+						chevron.SetPixel (x, y, new Color (1f, 1f, 1f, hits / 16f));
+					}
+				}
+				chevron.Apply ();
+			}
+			return chevron;
+		}
+	}
+
 	static GUIStyle MakeBox (Color color, Color text)
 	{
 		GUIStyle style = new GUIStyle ();
@@ -90,7 +130,7 @@ public static class UiStyle
 	}
 
 	public static GUIStyle PanelStyle, BannerStyle, ButtonStyle, ChosenButtonStyle, ActionButtonStyle;
-	public static GUIStyle TitleStyle, ValueStyle, LabelStyle, RuleStyle, MessageStyle;
+	public static GUIStyle TitleStyle, ValueStyle, LabelStyle, RuleStyle, MessageStyle, MessageCenteredStyle, ScoreStyle16, BarStyle, MenuPanelStyle;
 
 	//create the GUI styles once; call from OnGUI
 	public static void EnsureStyles ()
@@ -120,10 +160,19 @@ public static class UiStyle
 		LabelStyle.normal.textColor = TextDim;
 		LabelStyle.wordWrap = true;
 		RuleStyle = BannerStyle;
+		MenuPanelStyle = MakeBox (new Color (0.075f, 0.12f, 0.21f, 1f), Text);
+		BarStyle = new GUIStyle ();
+		BarStyle.normal.background = FlatTexture (new Color (0.086f, 0.137f, 0.239f, 0.9f));
+		ScoreStyle16 = new GUIStyle (LabelStyle);
+		ScoreStyle16.fontSize = 17;
+		ScoreStyle16.fontStyle = FontStyle.Bold;
+		ScoreStyle16.normal.textColor = AccentHover;
 		MessageStyle = new GUIStyle (LabelStyle);
 		MessageStyle.fontSize = 14;
 		MessageStyle.fontStyle = FontStyle.Bold;
 		MessageStyle.normal.textColor = AccentHover;
+		MessageCenteredStyle = new GUIStyle (MessageStyle);
+		MessageCenteredStyle.alignment = TextAnchor.MiddleCenter;
 	}
 
 	//sets up the camera and a gradient behind the cards; returns nothing, the background follows the camera by itself
