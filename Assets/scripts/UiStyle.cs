@@ -52,6 +52,42 @@ public static class UiStyle
 		return texture;
 	}
 
+	//a rounded frame: only a ring along the edge is drawn, the middle is empty
+	static Texture2D FrameTexture (Color color, float ringPixels)
+	{
+		Texture2D texture = new Texture2D (TextureSize, TextureSize, TextureFormat.RGBA32, false);
+		texture.filterMode = FilterMode.Bilinear;
+		texture.wrapMode = TextureWrapMode.Clamp;
+		for (int y = 0; y < TextureSize; y++) {
+			for (int x = 0; x < TextureSize; x++) {
+				float dx = Mathf.Max (CornerPixels - x - 0.5f, x + 0.5f - (TextureSize - CornerPixels), 0f);
+				float dy = Mathf.Max (CornerPixels - y - 0.5f, y + 0.5f - (TextureSize - CornerPixels), 0f);
+				float outside = Mathf.Sqrt (dx * dx + dy * dy) - CornerPixels;
+				//along the straight edges the distance to the edge counts, in the corners the distance to the arc
+				float edge = Mathf.Min (Mathf.Min (x + 0.5f, TextureSize - x - 0.5f), Mathf.Min (y + 0.5f, TextureSize - y - 0.5f));
+				float depth = (dx > 0f || dy > 0f) ? -outside : edge;
+				float alpha = Mathf.Clamp01 (0.5f - outside) * Mathf.Clamp01 (ringPixels - depth + 0.5f);
+				texture.SetPixel (x, y, new Color (color.r, color.g, color.b, color.a * alpha));
+			}
+		}
+		texture.Apply ();
+		return texture;
+	}
+
+	static Sprite frameSprite;
+
+	//a frame in the game world (selection); cornerWorld is the size of a corner in world units, the ring is half of it.
+	//Use it with drawMode Sliced and set the size of the SpriteRenderer.
+	public static Sprite FrameSprite (float cornerWorld)
+	{
+		if (frameSprite == null) {
+			frameSprite = Sprite.Create (FrameTexture (Color.white, CornerPixels / 2f), new Rect (0, 0, TextureSize, TextureSize),
+				new Vector2 (0.5f, 0.5f), CornerPixels / cornerWorld, 0, SpriteMeshType.FullRect,
+				new Vector4 (CornerPixels, CornerPixels, CornerPixels, CornerPixels));
+		}
+		return frameSprite;
+	}
+
 	static Sprite roundedSprite;
 
 	//rounded rectangle for in the game world (shadows, borders); cornerWorld is the size of a corner in world units.
