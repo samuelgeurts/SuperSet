@@ -103,8 +103,27 @@ public class CardModel : MonoBehaviour {
 	{
 		selected = value;
 		transform.localScale = value ? baseScale * 1.05f : baseScale;
-		spriteRenderer.color = value ? highlightColor : Color.white;
+
+		//the selected card gets a teal frame on its edge; the card itself stays white, so the colors can still be compared
+		if (value && selectionFrame == null) {
+			Vector2 size = spriteRenderer.sprite.bounds.size;
+			selectionFrame = new GameObject ("SelectionFrame");
+			selectionFrame.transform.SetParent (transform, false);
+			selectionFrame.transform.localPosition = spriteRenderer.sprite.bounds.center;
+			SpriteRenderer frame = selectionFrame.AddComponent<SpriteRenderer> ();
+			frame.sprite = UiStyle.FrameSprite (size.x * 0.08f);
+			frame.drawMode = SpriteDrawMode.Sliced;
+			frame.size = size;
+			frame.color = UiStyle.AccentHover;
+			frame.sortingLayerID = spriteRenderer.sortingLayerID;
+			frame.sortingOrder = spriteRenderer.sortingOrder + 2; //above the shapes on the card
+		}
+		if (selectionFrame != null) {
+			selectionFrame.SetActive (value);
+		}
 	}
+
+	GameObject selectionFrame;
 
 
 
