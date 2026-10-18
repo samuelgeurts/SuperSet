@@ -368,9 +368,9 @@ public class DeckView : MonoBehaviour
 			float bh = 170;
 			Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);
 			GUI.Box (box, "", UiStyle.PanelStyle);
-			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Game over", UiStyle.TitleStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Deck finished", UiStyle.TitleStyle);
 			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), "Score: " + score, UiStyle.ValueStyle);
-			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "New game", UiStyle.ActionButtonStyle)) {
+			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Continue", UiStyle.ActionButtonStyle)) {
 				NewGame ();
 			}
 		}
@@ -626,7 +626,7 @@ public class DeckView : MonoBehaviour
 		LoadBoard ();
 	}
 
-	//after "Game over": a new table for the same difficulty
+	//after "Deck finished": a new table for the same difficulty
 	void NewGame ()
 	{
 		StoreBoard ();
