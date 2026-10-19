@@ -109,9 +109,9 @@ public partial class DeckView
 		//the sound on or off, left of the game mode
 		Rect soundRect = new Rect (modeRect.x - 4 - ButtonHeight, 6, ButtonHeight, ButtonHeight);
 		if (GUI.Button (soundRect, "", UiStyle.ButtonStyle)) {
-			GameSound.Enabled = !GameSound.Enabled;
+			AudioManager.Enabled = !AudioManager.Enabled;
 		}
-		GUI.DrawTexture (new Rect (soundRect.x + 4, soundRect.y + 4, 24, 24), GameSound.Enabled ? SoundIcon.On : SoundIcon.Off);
+		GUI.DrawTexture (new Rect (soundRect.x + 4, soundRect.y + 4, 24, 24), AudioManager.Enabled ? SoundIcon.On : SoundIcon.Off);
 	}
 
 	//the open drop-down menu; a click outside it closes it
@@ -204,6 +204,7 @@ public partial class DeckView
 		DrawRule (width);
 		DrawMessage (width);
 		DrawTopBar (width);
+		DrawPileCounts (scale);
 		DrawTopMenu (width);
 
 		if (gameOver && !busy) {

@@ -17,10 +17,47 @@ public partial class DeckView
 	SpriteRenderer[] discardLayers = new SpriteRenderer[PileLayers - 1];
 	SpriteRenderer discardPlace, dim;
 	CardModel discardTop;
-	int shownTopIndex = -2;
+	SpriteRenderer drawShadow, discardShadow; //the shadows only show while there are cards on the pile
+	bool discardTopIsBack; //the card on top of the discard pile is shown with its back up
 	int pileLayerId, pileOrder;
 
 	const int LiftOrder = 100; //sorting boost of a card that moves over the table
+
+	bool skipping; //the flights are being finished at once after a click: no sounds
+	int skipConsumedFrame = -1;
+
+	//true when the player clicked or tapped; the click counts once
+	bool SkipRequested ()
+	{
+		if (skipConsumedFrame == Time.frameCount) {
+			return false;
+		}
+		bool clicked = Input.GetMouseButtonDown (0) || (Input.touchCount > 0 && Input.GetTouch (0).phase == TouchPhase.Began);
+		if (clicked) {
+			skipConsumedFrame = Time.frameCount;
+		}
+		return clicked;
+	}
+
+	void CardSound (Sfx sound, float volume)
+	{
+		if (!skipping) {
+			AudioManager.Play (sound, volume, Random.Range (0.94f, 1.06f));
+		}
+	}
+
+	//how long dealing takes grows with the number of cards on a logarithmic scale:
+	//6 cards take about 1 second, 36 cards about 2 seconds (a few cards take less)
+	static float DealTime (int count)
+	{
+		return count < 6 ? count / 6f : 1f + Mathf.Log (count / 6f) / Mathf.Log (6f);
+	}
+
+	//the time between two cards of a deal, so the whole deal, with the last flight, takes DealTime
+	static float Stagger (int count, float flight)
+	{
+		return count <= 1 ? 0f : Mathf.Max (0.02f, (DealTime (count) - flight) / (count - 1));
+	}
 
 	//everything a card does in one move: from where to where, when it starts and how long it takes
 	class Flight
@@ -42,10 +79,14 @@ public partial class DeckView
 	}
 
 	//move all cards of the list, each from its own start time, until every one has arrived
-	IEnumerator RunFlights (List<Flight> flights)
+	IEnumerator RunFlights (List<Flight> flights, bool allowSkip = false)
 	{
 		float t = 0f;
 		while (true) {
+			if (allowSkip && SkipRequested ()) {
+				t += 1000f; //every flight is at its end now
+				skipping = true;
+			}
 			bool allDone = true;
 			foreach (Flight f in flights) {
 				if (f.finished) {
@@ -77,6 +118,7 @@ public partial class DeckView
 			if (allDone) {
 				yield break;
 			}
+			skipping = false;
 			yield return null;
 			t += Time.deltaTime;
 		}
@@ -111,16 +153,62 @@ public partial class DeckView
 		}
 		discardPlace.color = new Color (1f, 1f, 1f, 0.1f);
 
+		//a pile is never perfectly straight: a small tilt per layer, and a soft shadow under the lowest one
+		float[] drawTilt = { -1.4f, 0.9f, -0.5f, 0f };
+		float[] discardTilt = { 1.8f, -1.1f, 0.7f };
+		for (int i = 0; i < PileLayers; i++) {
+			drawLayers [i].transform.rotation = Quaternion.Euler (0f, 0f, drawTilt [i]);
+		}
+		for (int i = 0; i < PileLayers - 1; i++) {
+			discardLayers [i].transform.rotation = Quaternion.Euler (0f, 0f, discardTilt [i]);
+		}
+		drawShadow = AddPileShadow (drawLayers [0], size);
+		discardShadow = AddPileShadow (discardLayers [0], size);
+
 		GameObject top = (GameObject)Instantiate (cardPrefab);
 		top.SetActive (true);
 		top.name = "DiscardTop";
 		discardTop = top.GetComponent<CardModel> ();
 		top.GetComponent<BoxCollider2D> ().enabled = false; //a pile is no card to pick
+		top.transform.rotation = Quaternion.Euler (0f, 0f, 2.5f);
 
 		dim = MakePileSprite ("Dim", Sprite.Create (Texture2D.whiteTexture, new Rect (0, 0, 4, 4), new Vector2 (0.5f, 0.5f), 4f), pileOrder + LiftOrder / 2);
 		dim.transform.SetParent (Camera.main.transform, false);
 		dim.transform.localPosition = new Vector3 (0f, 0f, 10f);
 		dim.enabled = false;
+	}
+
+	//a soft shadow under a pile of cards, as big as a card
+	SpriteRenderer AddPileShadow (SpriteRenderer under, Vector2 size)
+	{
+		GameObject shadow = new GameObject ("Shadow");
+		shadow.transform.SetParent (under.transform, false);
+		shadow.transform.localPosition = new Vector3 (0.05f, -0.1f, 0f);
+		SpriteRenderer renderer = shadow.AddComponent<SpriteRenderer> ();
+		renderer.sprite = UiStyle.SoftShadow;
+		renderer.drawMode = SpriteDrawMode.Sliced;
+		renderer.size = size + Vector2.one * (2f * UiStyle.SoftShadowMargin);
+		renderer.color = new Color (0f, 0f, 0f, 0.55f);
+		renderer.sortingLayerID = pileLayerId;
+		renderer.sortingOrder = under.sortingOrder - 1;
+		return renderer;
+	}
+
+	//the number of cards on both piles, under them
+	void DrawPileCounts (float scale)
+	{
+		if (drawLayers [0] == null || Camera.main == null) {
+			return;
+		}
+		float below = CardWorldSize ().y / 2f + 0.15f;
+		DrawCount (drawPilePos + new Vector3 (0f, -below, 0f), "Deck " + drawShown, scale);
+		DrawCount (discardPilePos + new Vector3 (0f, -below, 0f), "Found " + discardCount, scale);
+	}
+
+	void DrawCount (Vector3 world, string text, float scale)
+	{
+		Vector3 screen = Camera.main.WorldToScreenPoint (world);
+		GUI.Label (new Rect (screen.x / scale - 50f, (Screen.height - screen.y) / scale, 100f, 18f), text, UiStyle.CountStyle);
 	}
 
 	SpriteRenderer MakePileSprite (string objectName, Sprite sprite, int order)
@@ -152,12 +240,14 @@ public partial class DeckView
 		}
 		discardPlace.transform.position = discardPilePos;
 		discardPlace.enabled = discardCount == 0;
+		drawShadow.enabled = drawShown > 0;
+		discardShadow.enabled = discardCount > 0;
 		discardTop.gameObject.SetActive (discardCount > 0);
 		discardTop.transform.position = discardPilePos;
-		if (discardCount > 0 && shownTopIndex != discardTopIndex) {
-			shownTopIndex = discardTopIndex;
-			discardTop.cardIndex = discardTopIndex;
-			discardTop.ToggleFace (true);
+		if (!discardTopIsBack) {
+			//the pile lies face down: it does not show one card of the sets that were found
+			discardTopIsBack = true;
+			discardTop.ToggleFace (false);
 		}
 	}
 
@@ -187,13 +277,13 @@ public partial class DeckView
 	{
 		Camera cam = Camera.main;
 		float visibleWidth = 2f * cam.orthographicSize * cam.aspect;
-		return Mathf.Clamp (0.92f * visibleWidth / (count * CardWorldSize ().x * 1.06f), 0.7f, 1.5f);
+		return Mathf.Clamp (0.92f * visibleWidth / (count * CardWorldSize ().x * 1.16f), 0.7f, 1.5f);
 	}
 
 	//the place of one card of a set that is shown: in a row in the middle of the table
 	Vector3 EnlargedPos (int index, int count)
 	{
-		float pitch = CardWorldSize ().x * EnlargeScale (count) * 1.06f;
+		float pitch = CardWorldSize ().x * EnlargeScale (count) * 1.16f; //room for the colored borders
 		return new Vector3 ((index - (count - 1) / 2f) * pitch, 0f, 0f);
 	}
 
@@ -203,7 +293,6 @@ public partial class DeckView
 		if (slotList.Count == 0) {
 			yield break;
 		}
-		GameSound.Deal (slotList.Count, stagger);
 		List<Flight> flights = new List<Flight> ();
 		for (int k = 0; k < slotList.Count; k++) {
 			int slot = slotList [k];
@@ -218,6 +307,7 @@ public partial class DeckView
 			f.delay = k * stagger;
 			f.duration = flight;
 			f.onStart = () => {
+				CardSound (Sfx.CardDeal, 0.7f);
 				card.ClearFound ();
 				card.ToggleFace (false);
 				card.SetLift (LiftOrder + order);
@@ -237,10 +327,10 @@ public partial class DeckView
 			};
 			flights.Add (f);
 		}
-		yield return RunFlights (flights);
+		yield return RunFlights (flights, true);
 	}
 
-	//a new table: all cards are dealt from the draw pile, in about a second
+	//a new table: all cards are dealt from the draw pile; 6 cards take about a second, 36 cards about two
 	IEnumerator DealBoard ()
 	{
 		busy = true;
@@ -252,7 +342,7 @@ public partial class DeckView
 		}
 		drawShown = deckOrder.Count;
 		PlacePiles ();
-		yield return DealSlots (all, Mathf.Min (0.1f, 0.7f / Mathf.Max (1, all.Count)), 0.3f);
+		yield return DealSlots (all, Stagger (all.Count, 0.3f), 0.3f);
 		drawShown = deckOrder.Count - nextCard;
 		PlacePiles ();
 		busy = false;
@@ -263,7 +353,7 @@ public partial class DeckView
 	IEnumerator FoundSequence (int[] set, bool roundDone)
 	{
 		busy = true;
-		GameSound.Pling ();
+		AudioManager.Play (Sfx.SetFound, 0.8f);
 		int count = set.Length;
 		List<Flight> flights = new List<Flight> ();
 		for (int i = 0; i < count; i++) {
@@ -283,7 +373,11 @@ public partial class DeckView
 		}
 		StartCoroutine (FadeDim (0f, DimAlpha, 0.25f));
 		yield return RunFlights (flights);
-		yield return new WaitForSeconds (2f);
+
+		//the set stays in view for two seconds, or until the player clicks or taps
+		for (float shown = 0f; shown < 2f && !SkipRequested (); shown += Time.deltaTime) {
+			yield return null;
+		}
 
 		StartCoroutine (FadeDim (DimAlpha, 0f, 0.3f));
 		if (roundDone) {
@@ -307,7 +401,7 @@ public partial class DeckView
 				};
 				flights.Add (f);
 			}
-			yield return RunFlights (flights);
+			yield return RunFlights (flights, true);
 		}
 		busy = false;
 	}
@@ -325,7 +419,7 @@ public partial class DeckView
 		}
 		used.Sort ();
 
-		GameSound.Deal (used.Count, 0.05f);
+		float discardStagger = Stagger (used.Count, 0.3f);
 		List<Flight> flights = new List<Flight> ();
 		for (int k = 0; k < used.Count; k++) {
 			int order = k;
@@ -335,9 +429,10 @@ public partial class DeckView
 			f.from = card.transform.position;
 			f.fromScale = card.transform.localScale.x / card.BaseScale.x;
 			f.to = () => discardPilePos;
-			f.delay = k * 0.05f;
+			f.delay = k * discardStagger;
 			f.duration = 0.3f;
 			f.onStart = () => {
+				CardSound (Sfx.CardDiscard, 0.6f);
 				card.inFlight = true;
 				card.SetLift (LiftOrder + order);
 			};
@@ -351,7 +446,7 @@ public partial class DeckView
 			};
 			flights.Add (f);
 		}
-		yield return RunFlights (flights);
+		yield return RunFlights (flights, true);
 
 		//the data: new cards for the used places, and a set on the table again
 		drawShown = deckOrder.Count - nextCard;
@@ -368,7 +463,7 @@ public partial class DeckView
 				dealt.Add (slot);
 			}
 		}
-		yield return DealSlots (dealt, 0.1f, 0.3f);
+		yield return DealSlots (dealt, Stagger (dealt.Count, 0.3f), 0.3f);
 		drawShown = deckOrder.Count - nextCard;
 		PlacePiles ();
 	}
@@ -377,7 +472,7 @@ public partial class DeckView
 	IEnumerator WrongSequence (List<CardModel> cards)
 	{
 		busy = true;
-		GameSound.Wrong ();
+		AudioManager.Play (Sfx.SetWrong, 0.8f);
 		int[] places = new int[cards.Count];
 		for (int i = 0; i < cards.Count; i++) {
 			places [i] = System.Array.IndexOf (slots, cards [i]);

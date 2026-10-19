@@ -43,7 +43,7 @@ public partial class DeckView : MonoBehaviour
 				SetRuleOpen (false);
 			}
 			selectedCards.Add (card);
-			card.SetSelected (true);
+			card.SetSelected (true, UiStyle.FoundColor (foundSets.Count)); //the color the set will get
 			if (selectedCards.Count == setSize) {
 				CheckSelection ();
 			}
