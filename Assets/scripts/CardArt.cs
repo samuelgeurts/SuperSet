@@ -18,8 +18,11 @@ public static class CardArt
 	const float TexelsPerUnit = 120f;
 	const float MarkPixelsPerUnit = TexelsPerUnit / UnitInCard;
 	const float LineWidth = 3.5f; //in mark texels
-	const float HatchPeriod = 16f; //distance between the lines of a fill, in mark texels; the same for every size
-	const float HatchWidth = 3f;
+	const float HatchPeriod = 12f; //distance between the lines of a fill, in mark texels; the same for every size
+	//the width of the lines: the fills get equal steps of darkness (outline, diagonal lines, crossed lines, solid);
+	//one set of lines covers a third of the inside, two crossed sets cover two thirds
+	public static float HatchWidthSingle = HatchPeriod / 3f;
+	public static float HatchWidthCrossed = HatchPeriod * (1f - Mathf.Sqrt (1f / 3f));
 
 	//distance between the marks of a card, in card units
 	public const float MarkSpacing = 48f / 42f;
@@ -72,11 +75,167 @@ public static class CardArt
 		+ Mathf.Min (Mathf.Max (qx, qy), 0f) - radius;
 	}
 
+	static float Clamp01 (float v)
+	{
+		return Mathf.Clamp01 (v);
+	}
+
+	//a value between -1 and 1 for a pixel; the same every time, so the paper looks the same on every start
+	static float Noise (int x, int y)
+	{
+		uint h = (uint)x * 374761393u + (uint)y * 668265263u;
+		h = (h ^ (h >> 13)) * 1274126177u;
+		h ^= h >> 16;
+		return (h & 0xFFFF) / 32767.5f - 1f;
+	}
+
+	//---------------------------------------------------------------- the logo on the back: a stroke font
+
+	static void Arc (List<Vector2> line, float cx, float cy, float rx, float ry, float from, float to, int steps)
+	{
+		for (int i = 0; i <= steps; i++) {
+			float angle = Mathf.Lerp (from, to, i / (float)steps) * Mathf.Deg2Rad;
+			line.Add (new Vector2 (cx + rx * Mathf.Cos (angle), cy + ry * Mathf.Sin (angle)));
+		}
+	}
+
+	static List<Vector2> Line (params float[] xy)
+	{
+		List<Vector2> line = new List<Vector2> ();
+		for (int i = 0; i < xy.Length; i += 2) {
+			line.Add (new Vector2 (xy [i], xy [i + 1]));
+		}
+		return line;
+	}
+
+	//the lines of a letter in a box that is 1 high for S and t and 0.62 high for the small letters; returns the width
+	static float Letter (char c, List<List<Vector2>> lines)
+	{
+		switch (c) {
+		case 'S': {
+				List<Vector2> s = new List<Vector2> ();
+				Arc (s, 0.37f, 0.745f, 0.31f, 0.245f, 22f, 270f, 18);
+				Arc (s, 0.37f, 0.255f, 0.31f, 0.245f, 90f, -158f, 18);
+				lines.Add (s);
+				return 0.74f;
+			}
+		case 'u': {
+				List<Vector2> u = Line (0.06f, 0.62f, 0.06f, 0.27f);
+				Arc (u, 0.28f, 0.27f, 0.22f, 0.27f, 180f, 360f, 14);
+				lines.Add (u);
+				lines.Add (Line (0.5f, 0.62f, 0.5f, 0f));
+				return 0.56f;
+			}
+		case 'p': {
+				lines.Add (Line (0.06f, 0.62f, 0.06f, -0.32f));
+				List<Vector2> bowl = new List<Vector2> ();
+				Arc (bowl, 0.31f, 0.31f, 0.25f, 0.31f, 180f, -180f, 28);
+				lines.Add (bowl);
+				return 0.6f;
+			}
+		case 'e': {
+				List<Vector2> e = Line (0.04f, 0.31f, 0.56f, 0.31f);
+				Arc (e, 0.3f, 0.31f, 0.26f, 0.31f, 0f, 322f, 26);
+				lines.Add (e);
+				return 0.6f;
+			}
+		case 'r': {
+				lines.Add (Line (0.06f, 0.62f, 0.06f, 0f));
+				List<Vector2> r = new List<Vector2> ();
+				Arc (r, 0.28f, 0.4f, 0.22f, 0.22f, 180f, 55f, 10);
+				lines.Add (r);
+				return 0.42f;
+			}
+		default: { //t
+				List<Vector2> t = Line (0.2f, 0.88f, 0.2f, 0.14f);
+				Arc (t, 0.4f, 0.14f, 0.2f, 0.14f, 180f, 270f, 8);
+				lines.Add (t);
+				lines.Add (Line (0f, 0.64f, 0.44f, 0.64f));
+				return 0.46f;
+			}
+		}
+	}
+
+	const float LetterGap = 0.16f;
+
+	static float WordWidth (string word)
+	{
+		float width = 0f;
+		foreach (char c in word) {
+			width += Letter (c, new List<List<Vector2>> ()) + LetterGap;
+		}
+		return width - LetterGap;
+	}
+
+	static float DistanceToSegment (float px, float py, Vector2 a, Vector2 b)
+	{
+		float dx = b.x - a.x;
+		float dy = b.y - a.y;
+		float length = dx * dx + dy * dy;
+		float t = length > 0f ? Mathf.Clamp01 (((px - a.x) * dx + (py - a.y) * dy) / length) : 0f;
+		float ex = px - (a.x + t * dx);
+		float ey = py - (a.y + t * dy);
+		return Mathf.Sqrt (ex * ex + ey * ey);
+	}
+
+	//draw a word with round strokes into a coverage map of the card texture; unit is the height of a tall letter in pixels
+	static void DrawWord (float[] cover, string word, float left, float baseline, float unit, float strokePixels)
+	{
+		float x = left;
+		foreach (char c in word) {
+			List<List<Vector2>> lines = new List<List<Vector2>> ();
+			float advance = Letter (c, lines);
+
+			//the segments of this letter in pixels, and the box they cover
+			List<Vector2[]> segments = new List<Vector2[]> ();
+			float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+			foreach (List<Vector2> line in lines) {
+				for (int i = 0; i + 1 < line.Count; i++) {
+					Vector2 a = new Vector2 (x + line [i].x * unit, baseline + line [i].y * unit);
+					Vector2 b = new Vector2 (x + line [i + 1].x * unit, baseline + line [i + 1].y * unit);
+					segments.Add (new Vector2[] { a, b });
+					minX = Mathf.Min (minX, Mathf.Min (a.x, b.x));
+					maxX = Mathf.Max (maxX, Mathf.Max (a.x, b.x));
+					minY = Mathf.Min (minY, Mathf.Min (a.y, b.y));
+					maxY = Mathf.Max (maxY, Mathf.Max (a.y, b.y));
+				}
+			}
+			float half = strokePixels / 2f;
+			int x0 = Mathf.Max (0, Mathf.FloorToInt (minX - half - 2f));
+			int x1 = Mathf.Min (CardWidth - 1, Mathf.CeilToInt (maxX + half + 2f));
+			int y0 = Mathf.Max (0, Mathf.FloorToInt (minY - half - 2f));
+			int y1 = Mathf.Min (CardHeight - 1, Mathf.CeilToInt (maxY + half + 2f));
+			for (int y = y0; y <= y1; y++) {
+				for (int px = x0; px <= x1; px++) {
+					float best = float.MaxValue;
+					foreach (Vector2[] segment in segments) {
+						best = Mathf.Min (best, DistanceToSegment (px + 0.5f, y + 0.5f, segment [0], segment [1]));
+					}
+					float value = Clamp01 (half - best + 0.5f);
+					int index = y * CardWidth + px;
+					cover [index] = Mathf.Max (cover [index], value);
+				}
+			}
+			x += (advance + LetterGap) * unit;
+		}
+	}
+
+	//the back of a card: dark blue with a double frame, a fine diagonal pattern and the name of the game in the middle
 	static Sprite MakeBackSprite ()
 	{
+		float[] superCover = new float[CardWidth * CardHeight];
+		float[] setCover = new float[CardWidth * CardHeight];
+		const float textWidth = 232f;
+		float unitSuper = textWidth / WordWidth ("Super");
+		float unitSet = textWidth / WordWidth ("Set");
+		DrawWord (superCover, "Super", (CardWidth - textWidth) / 2f, 283f, unitSuper, 0.095f * unitSuper);
+		DrawWord (setCover, "Set", (CardWidth - textWidth) / 2f, 133f, unitSet, 0.095f * unitSet);
+
 		Color32[] pixels = new Color32[CardWidth * CardHeight];
 		Color32 body = new Color32 (22, 35, 61, 255);
+		Color32 bodyLight = new Color32 (31, 49, 84, 255);
 		Color32 teal = new Color32 (45, 212, 191, 255);
+		Color32 paper = new Color32 (232, 238, 252, 255);
 		for (int y = 0; y < CardHeight; y++) {
 			for (int x = 0; x < CardWidth; x++) {
 				float px = x + 0.5f;
@@ -84,10 +243,23 @@ public static class CardArt
 				float outside = RoundedBoxDistance (px, py, CardWidth / 2f, CardHeight / 2f, 16f);
 				float cover = Clamp01 (0.5f - outside);
 				float edge = Clamp01 (outside + 3f + 0.5f);
-				float frame = RoundedBoxDistance (px, py, CardWidth / 2f - 22f, CardHeight / 2f - 22f, 8f);
-				float diamond = (Mathf.Abs (px - CardWidth / 2f) / 70f + Mathf.Abs (py - CardHeight / 2f) / 105f - 1f) * 60f;
-				float ring = Mathf.Max (Clamp01 (2f - Mathf.Abs (frame)), Clamp01 (2f - Mathf.Abs (diamond)));
-				Color32 color = Color32.Lerp (body, teal, ring);
+
+				//a soft light from the top left over the dark blue, and fine diagonal lines
+				float light = Clamp01 ((py / CardHeight) * 0.6f + (1f - px / CardWidth) * 0.4f);
+				Color32 color = Color32.Lerp (body, bodyLight, light * 0.7f);
+				float diagonal = Mathf.Abs (((px + py) % 14f) - 7f);
+				color = Color32.Lerp (color, teal, Clamp01 (1.2f - diagonal) * 0.07f);
+
+				//two thin frames, the outer one stronger
+				float frame1 = RoundedBoxDistance (px, py, CardWidth / 2f - 18f, CardHeight / 2f - 18f, 9f);
+				float frame2 = RoundedBoxDistance (px, py, CardWidth / 2f - 28f, CardHeight / 2f - 28f, 5f);
+				float rings = Mathf.Max (Clamp01 (2f - Mathf.Abs (frame1)), 0.45f * Clamp01 (1.2f - Mathf.Abs (frame2)));
+				color = Color32.Lerp (color, teal, rings);
+
+				//the logo: Super in white, Set in teal, over the pattern
+				color = Color32.Lerp (color, paper, superCover [y * CardWidth + x]);
+				color = Color32.Lerp (color, teal, setCover [y * CardWidth + x]);
+
 				color = Color32.Lerp (color, CardBorder, edge);
 				color.a = (byte)(cover * 255f);
 				pixels [y * CardWidth + x] = color;
@@ -96,11 +268,7 @@ public static class CardArt
 		return MakeSprite (pixels, CardWidth, CardHeight, CardPixelsPerUnit);
 	}
 
-	static float Clamp01 (float v)
-	{
-		return Mathf.Clamp01 (v);
-	}
-
+	//the front of a card: paper that is a little off white, with a fine grain, a soft shade along the rounded edge and a thin light line inside it
 	static Sprite MakeCardSprite ()
 	{
 		Color32[] pixels = new Color32[CardWidth * CardHeight];
@@ -116,7 +284,18 @@ public static class CardArt
 				                + Mathf.Min (Mathf.Max (qx, qy), 0f) - radius;
 				float cover = Clamp01 (0.5f - outside);
 				float edge = Clamp01 (outside + border + 0.5f);
-				Color32 color = Color32.Lerp (new Color32 (255, 255, 255, 255), CardBorder, edge);
+
+				float depth = -outside; //positive inside the card
+				float rim = Clamp01 (1f - depth / 14f);
+				float shade = 1f - 0.07f * rim * rim; //the edge is a little darker, like a card that bends away
+				float lift = 0.014f * (y / (float)CardHeight - 0.5f); //a little lighter at the top
+				float grain = Noise (x, y) * 0.011f + Noise (x / 5, y / 5) * 0.007f; //fine and coarser paper fibres
+				float shine = 0.02f * Clamp01 (1.5f - Mathf.Abs (depth - 5f)); //a thin light line inside the border
+
+				byte r = (byte)(255f * Clamp01 (0.986f * shade + lift + grain + shine));
+				byte g = (byte)(255f * Clamp01 (0.979f * shade + lift + grain + shine));
+				byte b = (byte)(255f * Clamp01 (0.958f * shade + lift + grain + shine));
+				Color32 color = Color32.Lerp (new Color32 (r, g, b, 255), CardBorder, edge);
 				color.a = (byte)(cover * 255f);
 				pixels [y * CardWidth + x] = color;
 			}
@@ -185,12 +364,12 @@ public static class CardArt
 	}
 
 	//a thin line pattern: 1 on a line, 0 between, along the coordinate c
-	static float Stripe (float c)
+	static float Stripe (float c, float width)
 	{
 		float f = c / HatchPeriod;
 		f -= Mathf.Floor (f);
 		float distance = Mathf.Min (f, 1f - f) * HatchPeriod;
-		return Clamp01 (HatchWidth / 2f + 0.5f - distance);
+		return Clamp01 (width / 2f + 0.5f - distance);
 	}
 
 	static Dictionary<int, Sprite> markSprites = new Dictionary<int, Sprite> ();
@@ -280,9 +459,10 @@ public static class CardArt
 						alpha = ring;
 					} else {
 						//the lines run through the middle of the mark, so every mark has the same pattern
-						float lines = Stripe ((ux + uy) * 0.7071f);
+						float lineWidth = fill == 2 ? HatchWidthCrossed : HatchWidthSingle;
+						float lines = Stripe ((ux + uy) * 0.7071f, lineWidth);
 						if (fill == 2) {
-							lines = Mathf.Max (lines, Stripe ((ux - uy) * 0.7071f));
+							lines = Mathf.Max (lines, Stripe ((ux - uy) * 0.7071f, lineWidth));
 						}
 						alpha = Mathf.Max (ring, cover * lines);
 					}

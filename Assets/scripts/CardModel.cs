@@ -53,6 +53,7 @@ public class CardModel : MonoBehaviour {
 		spriteRenderer = GetComponent<SpriteRenderer>(); //angle brackets specify the type
 		baseScale = transform.localScale;
 		spriteRenderer.sprite = CardArt.CardSprite;
+		transform.rotation = Quaternion.Euler (0f, 0f, (Random.value - 0.5f) * 1.0f); //a card never lies perfectly straight
 		FitColliderToSprite ();
 		CreateShadow ();
 	}
@@ -101,6 +102,12 @@ public class CardModel : MonoBehaviour {
 
 	public void SetSelected(bool value)
 	{
+		SetSelected (value, UiStyle.AccentHover);
+	}
+
+	//select or deselect; the frame has the color of the set this card is picked for
+	public void SetSelected(bool value, Color color)
+	{
 		selected = value;
 		transform.localScale = value ? baseScale * 1.05f : baseScale;
 
@@ -120,6 +127,7 @@ public class CardModel : MonoBehaviour {
 		}
 		if (selectionFrame != null) {
 			selectionFrame.SetActive (value);
+			selectionFrame.GetComponent<SpriteRenderer> ().color = color;
 		}
 	}
 
@@ -187,7 +195,17 @@ public class CardModel : MonoBehaviour {
 	//a soft shadow under the card
 	void CreateShadow()
 	{
-		CreateBehind ("Shadow", new Color (0f, 0f, 0f, 0.35f), 0.03f, new Vector2 (0.03f, -0.04f), -2);
+		Vector2 size = spriteRenderer.sprite.bounds.size;
+		GameObject shadow = new GameObject ("Shadow");
+		shadow.transform.SetParent (transform, false);
+		shadow.transform.localPosition = spriteRenderer.sprite.bounds.center + new Vector3 (0.05f, -0.1f, 0f);
+		SpriteRenderer renderer = shadow.AddComponent<SpriteRenderer> ();
+		renderer.sprite = UiStyle.SoftShadow;
+		renderer.drawMode = SpriteDrawMode.Sliced;
+		renderer.size = size + Vector2.one * (2f * UiStyle.SoftShadowMargin);
+		renderer.color = new Color (0f, 0f, 0f, 0.55f);
+		renderer.sortingLayerID = spriteRenderer.sortingLayerID;
+		renderer.sortingOrder = spriteRenderer.sortingOrder - 2;
 	}
 
 	//a rounded rectangle behind the card: margin and offset are fractions of the card width

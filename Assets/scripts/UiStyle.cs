@@ -14,13 +14,14 @@ public static class UiStyle
 	public static readonly Color TextDim = new Color (0.624f, 0.702f, 0.851f);
 	public static readonly Color Found = new Color (0.93f, 0.2f, 0.25f);
 
-	//border colors of the found sets on the table, one per set so they can be told apart
+	//border colors of the sets on the table, one per set so they can be told apart: the first set has the color of the
+	//selection (teal), then each next set has its own. The selection frame shows the color the set will get.
 	public static readonly Color[] FoundColors = {
-		new Color (0.93f, 0.2f, 0.25f), //red
-		new Color (1f, 0.76f, 0.1f), //amber
-		new Color (0.3f, 0.85f, 0.35f), //green
-		new Color (0.75f, 0.4f, 1f), //purple
-		new Color (1f, 0.5f, 0.8f), //pink
+		new Color (0.176f, 0.831f, 0.749f), //teal
+		new Color (0.98f, 0.80f, 0.08f), //gold
+		new Color (0.96f, 0.45f, 0.71f), //pink
+		new Color (0.65f, 0.55f, 0.98f), //violet
+		new Color (0.98f, 0.45f, 0.30f), //orange red
 		new Color (1f, 1f, 1f), //white
 	};
 
@@ -86,6 +87,39 @@ public static class UiStyle
 				new Vector4 (CornerPixels, CornerPixels, CornerPixels, CornerPixels));
 		}
 		return frameSprite;
+	}
+
+	//a soft shadow: a rounded rectangle that fades out, to put under cards; use it with drawMode Sliced.
+	//The rectangle itself is as big as the size you set minus twice the margin.
+	const int ShadowTexture = 96;
+	const int ShadowInset = 28;
+	public const float SoftShadowMargin = ShadowInset / 100f;
+	static Sprite softShadow;
+
+	public static Sprite SoftShadow {
+		get {
+			if (softShadow == null) {
+				Texture2D texture = new Texture2D (ShadowTexture, ShadowTexture, TextureFormat.RGBA32, false);
+				texture.filterMode = FilterMode.Bilinear;
+				texture.wrapMode = TextureWrapMode.Clamp;
+				float half = (ShadowTexture - 2 * ShadowInset) / 2f;
+				const float radius = 12f;
+				for (int y = 0; y < ShadowTexture; y++) {
+					for (int x = 0; x < ShadowTexture; x++) {
+						float qx = Mathf.Abs (x + 0.5f - ShadowTexture / 2f) - (half - radius);
+						float qy = Mathf.Abs (y + 0.5f - ShadowTexture / 2f) - (half - radius);
+						float outside = Mathf.Sqrt (Mathf.Max (qx, 0f) * Mathf.Max (qx, 0f) + Mathf.Max (qy, 0f) * Mathf.Max (qy, 0f))
+						                + Mathf.Min (Mathf.Max (qx, qy), 0f) - radius;
+						float alpha = Mathf.SmoothStep (1f, 0f, Mathf.Clamp01 (outside / 22f));
+						texture.SetPixel (x, y, new Color (0f, 0f, 0f, alpha));
+					}
+				}
+				texture.Apply ();
+				softShadow = Sprite.Create (texture, new Rect (0, 0, ShadowTexture, ShadowTexture), new Vector2 (0.5f, 0.5f), 100f, 0,
+					SpriteMeshType.FullRect, new Vector4 (ShadowInset, ShadowInset, ShadowInset, ShadowInset));
+			}
+			return softShadow;
+		}
 	}
 
 	static Sprite roundedSprite;
@@ -166,7 +200,7 @@ public static class UiStyle
 	}
 
 	public static GUIStyle PanelStyle, BannerStyle, ButtonStyle, ChosenButtonStyle, ActionButtonStyle;
-	public static GUIStyle TitleStyle, ValueStyle, LabelStyle, RuleStyle, MessageStyle, MessageCenteredStyle, ScoreStyle16, BarStyle, MenuPanelStyle;
+	public static GUIStyle TitleStyle, ValueStyle, LabelStyle, RuleStyle, MessageStyle, MessageCenteredStyle, ScoreStyle16, BarStyle, MenuPanelStyle, CountStyle;
 
 	//create the GUI styles once; call from OnGUI
 	public static void EnsureStyles ()
@@ -209,6 +243,10 @@ public static class UiStyle
 		MessageStyle.normal.textColor = AccentHover;
 		MessageCenteredStyle = new GUIStyle (MessageStyle);
 		MessageCenteredStyle.alignment = TextAnchor.MiddleCenter;
+		CountStyle = new GUIStyle (LabelStyle);
+		CountStyle.alignment = TextAnchor.UpperCenter;
+		CountStyle.fontSize = 12;
+		CountStyle.fontStyle = FontStyle.Bold;
 	}
 
 	//sets up the camera and a gradient behind the cards; returns nothing, the background follows the camera by itself
