@@ -26,7 +26,7 @@ public class CardModel : MonoBehaviour {
 		}
 		marks.Clear ();
 		if (!showFace) {
-			spriteRenderer.sprite = cardBack;
+			spriteRenderer.sprite = CardArt.BackSprite;
 			return;
 		}
 		spriteRenderer.sprite = CardArt.CardSprite;
@@ -123,7 +123,47 @@ public class CardModel : MonoBehaviour {
 		}
 	}
 
-	GameObject selectionFrame;
+	GameObject selectionFrame, wrongFrame;
+
+	//a red frame for a wrong set; it is shown for a moment while the cards shake
+	public void ShowWrong(bool value)
+	{
+		if (value && wrongFrame == null) {
+			Vector2 size = spriteRenderer.sprite.bounds.size;
+			wrongFrame = new GameObject ("WrongFrame");
+			wrongFrame.transform.SetParent (transform, false);
+			wrongFrame.transform.localPosition = spriteRenderer.sprite.bounds.center;
+			SpriteRenderer frame = wrongFrame.AddComponent<SpriteRenderer> ();
+			frame.sprite = UiStyle.FrameSprite (size.x * 0.08f);
+			frame.drawMode = SpriteDrawMode.Sliced;
+			frame.size = size;
+			frame.color = UiStyle.Found;
+			frame.sortingLayerID = spriteRenderer.sortingLayerID;
+			frame.sortingOrder = spriteRenderer.sortingOrder + 3; //above the shapes and the selection frame
+		}
+		if (wrongFrame != null) {
+			wrongFrame.SetActive (value);
+		}
+	}
+
+	public Vector3 BaseScale { get { return baseScale; } }
+
+	//true while DeckView moves the card by hand (dealing, showing a set), so the layout leaves its place alone
+	public bool inFlight;
+
+	int liftBoost;
+
+	//draw the card, its shadow, border and marks above the cards and piles on the table (boost > 0), or back in place (0)
+	public void SetLift(int boost)
+	{
+		if (boost == liftBoost) {
+			return;
+		}
+		foreach (SpriteRenderer renderer in GetComponentsInChildren<SpriteRenderer> (true)) {
+			renderer.sortingOrder += boost - liftBoost;
+		}
+		liftBoost = boost;
+	}
 
 
 

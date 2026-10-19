@@ -14,6 +14,8 @@ public partial class DeckView
 		public bool[] slotActive;
 		public List<int[]> foundSets;
 		public bool gameOver;
+		public int discardCount; //cards on the discard pile
+		public int discardTop; //card on top of the discard pile, -1 when it is empty
 	}
 
 	Dictionary<int, Board> boards = new Dictionary<int, Board> ();
@@ -35,7 +37,8 @@ public partial class DeckView
 	{
 		boardSize = SetLogic.BoardSize (dimensionCount, setSize);
 		Board board;
-		if (!boards.TryGetValue (BoardKey (), out board)) {
+		bool isNew = !boards.TryGetValue (BoardKey (), out board);
+		if (isNew) {
 			StartNewBoard ();
 		} else {
 			deckOrder = board.deckOrder;
@@ -44,12 +47,18 @@ public partial class DeckView
 			slotActive = board.slotActive;
 			foundSets = board.foundSets;
 			gameOver = board.gameOver;
+			discardCount = board.discardCount;
+			discardTopIndex = board.discardTop;
 			for (int slot = 0; slot < boardSize; slot++) {
 				SetDimensions (slot);
 			}
 			FindSets ();
 		}
+		drawShown = deckOrder.Count - nextCard;
 		ShowCards ();
+		if (isNew) {
+			StartCoroutine (DealBoard ());
+		}
 	}
 
 	//keep the table of the current difficulty and take its cards from the screen
@@ -62,6 +71,8 @@ public partial class DeckView
 		board.slotActive = slotActive;
 		board.foundSets = foundSets;
 		board.gameOver = gameOver;
+		board.discardCount = discardCount;
+		board.discardTop = discardTopIndex;
 		boards [BoardKey ()] = board;
 
 		ClearSelection ();
@@ -87,6 +98,8 @@ public partial class DeckView
 		}
 		nextCard = boardSize;
 		foundSets = new List<int[]> ();
+		discardCount = 0;
+		discardTopIndex = -1;
 		EnsureSetOnBoard ();
 	}
 
@@ -99,7 +112,8 @@ public partial class DeckView
 		}
 	}
 
-	//put the next card from the deck on a slot; hides the slot when the deck is empty
+	//take the next card from the deck for a slot; the slot is no longer used when the deck is empty.
+	//Only the data changes here: the card on the screen is dealt by DealSlots.
 	void ChangeCard (int slot)
 	{
 		if (nextCard >= deckOrder.Count) {
@@ -107,13 +121,6 @@ public partial class DeckView
 		} else {
 			shownCardIndex [slot] = deckOrder [nextCard++];
 			SetDimensions (slot);
-		}
-		CardModel model = slots [slot];
-		if (model != null) {
-			model.ClearFound ();
-			model.gameObject.SetActive (slotActive [slot]);
-			model.cardIndex = shownCardIndex [slot];
-			model.ToggleFace (true);
 		}
 	}
 
@@ -166,6 +173,9 @@ public partial class DeckView
 	//change the difficulty; the table of that difficulty stays as the player left it
 	public void SetDifficulty (int dimensions, int size)
 	{
+		if (busy) {
+			return;
+		}
 		StoreBoard ();
 		dimensionCount = Mathf.Clamp (dimensions, 3, 5);
 		setSize = Mathf.Clamp (size, 3, 4);
@@ -178,6 +188,9 @@ public partial class DeckView
 	//after "Deck finished": a new table for the same difficulty
 	void NewGame ()
 	{
+		if (busy) {
+			return;
+		}
 		StoreBoard ();
 		boards.Remove (BoardKey ());
 		message = "";
