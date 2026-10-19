@@ -29,7 +29,7 @@ public partial class DeckView : MonoBehaviour
 	//select or deselect a clicked card; one card too many is ignored until one is deselected
 	public void ToggleSelection (CardModel card)
 	{
-		if (gameOver) {
+		if (gameOver || busy) {
 			return;
 		}
 		if (openMenu != TopMenu.None || menuClosedFrame == Time.frameCount) {
@@ -76,7 +76,9 @@ public partial class DeckView : MonoBehaviour
 	{
 		if (!SelectionIsSet ()) {
 			ShowMessage ("Not a set");
+			List<CardModel> wrongCards = new List<CardModel> (selectedCards);
 			ClearSelection ();
+			StartCoroutine (WrongSequence (wrongCards));
 			return;
 		}
 
@@ -105,8 +107,8 @@ public partial class DeckView : MonoBehaviour
 			ShowMessage ("Set found! " + numberofSets + " more on the table");
 		} else {
 			ShowMessage ("Set found!");
-			ReplaceFoundCards ();
 		}
+		StartCoroutine (FoundSequence (found, numberofSets <= 0));
 	}
 
 	bool IsFound (int[] set)
@@ -117,21 +119,6 @@ public partial class DeckView : MonoBehaviour
 			}
 		}
 		return false;
-	}
-
-	//all sets on the table are found: put new cards on the places of every card from a found set
-	void ReplaceFoundCards ()
-	{
-		HashSet<int> used = new HashSet<int> ();
-		foreach (int[] set in foundSets) {
-			foreach (int slot in set) {
-				used.Add (slot);
-			}
-		}
-		foreach (int slot in used) {
-			ChangeCard (slot);
-		}
-		EnsureSetOnBoard ();
 	}
 
 	void ClearSelection ()

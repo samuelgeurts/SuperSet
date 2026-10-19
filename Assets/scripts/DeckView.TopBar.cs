@@ -83,6 +83,9 @@ public partial class DeckView
 		GUI.Label (new Rect (48, 4, 70, 14), "Score", UiStyle.LabelStyle);
 		GUI.Label (new Rect (48, 17, 90, 24), score.ToString (), UiStyle.ScoreStyle16);
 
+		//the difficulty and the game mode wait while cards are moving
+		GUI.enabled = !busy;
+
 		//middle: the difficulty
 		float diffWidth = Portrait ? 124 : 300;
 		Rect diffRect = new Rect ((width - diffWidth) / 2, 6, diffWidth, ButtonHeight);
@@ -101,6 +104,14 @@ public partial class DeckView
 		for (int i = 0; i < 4; i++) {
 			DrawSquare (new Rect (modeRect.x + 8 + (i % 2) * 9, modeRect.y + 8 + (i / 2) * 9, 7, 7), Color.white);
 		}
+		GUI.enabled = true;
+
+		//the sound on or off, left of the game mode
+		Rect soundRect = new Rect (modeRect.x - 4 - ButtonHeight, 6, ButtonHeight, ButtonHeight);
+		if (GUI.Button (soundRect, "", UiStyle.ButtonStyle)) {
+			GameSound.Enabled = !GameSound.Enabled;
+		}
+		GUI.DrawTexture (new Rect (soundRect.x + 4, soundRect.y + 4, 24, 24), GameSound.Enabled ? SoundIcon.On : SoundIcon.Off);
 	}
 
 	//the open drop-down menu; a click outside it closes it
@@ -195,7 +206,7 @@ public partial class DeckView
 		DrawTopBar (width);
 		DrawTopMenu (width);
 
-		if (gameOver) {
+		if (gameOver && !busy) {
 			float bw = Mathf.Min (320f, width - 16f);
 			float bh = 170;
 			Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);

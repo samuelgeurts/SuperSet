@@ -2,7 +2,8 @@
 
 Samuel Geurts (SNG-Solutions)
 
-Status: idee, besproken op 2026-10-18; nog geen ticket of code.
+Status: gebouwd op branch feature/ticket-33-delen (tickets #33 t/m #37), wacht op test en akkoord van de gebruiker.
+Afwijking van het idee: de huidige spelregel blijft; een gevonden set wordt 2 seconden getoond en gaat daarna terug naar zijn plek met gekleurde rand. Pas als alle sets op tafel gevonden zijn, gaan alle gebruikte kaarten naar de aflegstapel en worden nieuwe gedeeld.
 Bij een besluit: werk dit document bij en noteer het ook onder het ticket.
 
 ## Het idee

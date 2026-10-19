@@ -51,6 +51,51 @@ public static class CardArt
 		}
 	}
 
+	static Sprite backSprite;
+
+	//the back of a card: dark blue with a teal frame and diamond, the size of the white card
+	public static Sprite BackSprite {
+		get {
+			if (backSprite == null) {
+				backSprite = MakeBackSprite ();
+			}
+			return backSprite;
+		}
+	}
+
+	//signed distance (in pixels, positive outside) to a rounded box around the middle of the texture
+	static float RoundedBoxDistance (float x, float y, float halfX, float halfY, float radius)
+	{
+		float qx = Mathf.Abs (x - CardWidth / 2f) - (halfX - radius);
+		float qy = Mathf.Abs (y - CardHeight / 2f) - (halfY - radius);
+		return Mathf.Sqrt (Mathf.Max (qx, 0f) * Mathf.Max (qx, 0f) + Mathf.Max (qy, 0f) * Mathf.Max (qy, 0f))
+		+ Mathf.Min (Mathf.Max (qx, qy), 0f) - radius;
+	}
+
+	static Sprite MakeBackSprite ()
+	{
+		Color32[] pixels = new Color32[CardWidth * CardHeight];
+		Color32 body = new Color32 (22, 35, 61, 255);
+		Color32 teal = new Color32 (45, 212, 191, 255);
+		for (int y = 0; y < CardHeight; y++) {
+			for (int x = 0; x < CardWidth; x++) {
+				float px = x + 0.5f;
+				float py = y + 0.5f;
+				float outside = RoundedBoxDistance (px, py, CardWidth / 2f, CardHeight / 2f, 16f);
+				float cover = Clamp01 (0.5f - outside);
+				float edge = Clamp01 (outside + 3f + 0.5f);
+				float frame = RoundedBoxDistance (px, py, CardWidth / 2f - 22f, CardHeight / 2f - 22f, 8f);
+				float diamond = (Mathf.Abs (px - CardWidth / 2f) / 70f + Mathf.Abs (py - CardHeight / 2f) / 105f - 1f) * 60f;
+				float ring = Mathf.Max (Clamp01 (2f - Mathf.Abs (frame)), Clamp01 (2f - Mathf.Abs (diamond)));
+				Color32 color = Color32.Lerp (body, teal, ring);
+				color = Color32.Lerp (color, CardBorder, edge);
+				color.a = (byte)(cover * 255f);
+				pixels [y * CardWidth + x] = color;
+			}
+		}
+		return MakeSprite (pixels, CardWidth, CardHeight, CardPixelsPerUnit);
+	}
+
 	static float Clamp01 (float v)
 	{
 		return Mathf.Clamp01 (v);
