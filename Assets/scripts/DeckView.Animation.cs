@@ -9,6 +9,7 @@ public partial class DeckView
 	bool busy; //an animation runs: the player cannot pick cards or change the difficulty
 
 	int discardCount; //cards on the discard pile
+	int discardSets; //the sets on the discard pile (sets can share cards, so this is not the number of cards divided by the set size)
 	int discardTopIndex = -1; //card on top of the discard pile, -1 when it is empty
 	int drawShown; //cards left on the draw pile, as shown on the screen
 
@@ -202,7 +203,7 @@ public partial class DeckView
 		}
 		float below = CardWorldSize ().y / 2f + 0.15f;
 		DrawCount (drawPilePos + new Vector3 (0f, -below, 0f), "Deck " + drawShown, scale);
-		DrawCount (discardPilePos + new Vector3 (0f, -below, 0f), "Found " + discardCount, scale);
+		DrawCount (discardPilePos + new Vector3 (0f, -below, 0f), "Found " + discardSets, scale);
 	}
 
 	void DrawCount (Vector3 world, string text, float scale)
@@ -343,6 +344,7 @@ public partial class DeckView
 		drawShown = deckOrder.Count;
 		PlacePiles ();
 		yield return DealSlots (all, Stagger (all.Count, 0.3f), 0.3f);
+		ShowFoundBorders (); //dealing took the borders off; a table that is rebuilt from a log has found sets already
 		drawShown = deckOrder.Count - nextCard;
 		PlacePiles ();
 		busy = false;
@@ -406,8 +408,8 @@ public partial class DeckView
 		busy = false;
 	}
 
-	//the cards of all found sets fly to the discard pile; then their places get new cards from the deck
-	IEnumerator DiscardAndReplace ()
+	//the slots of the cards in all found sets of the table, in order
+	List<int> UsedSlots ()
 	{
 		List<int> used = new List<int> ();
 		foreach (int[] set in foundSets) {
@@ -418,6 +420,27 @@ public partial class DeckView
 			}
 		}
 		used.Sort ();
+		return used;
+	}
+
+	//the data of DiscardAndReplace without the animation (a table that is rebuilt from a log):
+	//the used cards go to the discard pile and their places get new cards
+	void ReplaceFoundCardsData ()
+	{
+		List<int> used = UsedSlots ();
+		discardCount += used.Count;
+		discardSets += foundSets.Count;
+		discardTopIndex = shownCardIndex [used [used.Count - 1]];
+		foreach (int slot in used) {
+			ChangeCard (slot);
+		}
+		EnsureSetOnBoard ();
+	}
+
+	//the cards of all found sets fly to the discard pile; then their places get new cards from the deck
+	IEnumerator DiscardAndReplace ()
+	{
+		List<int> used = UsedSlots ();
 
 		float discardStagger = Stagger (used.Count, 0.3f);
 		List<Flight> flights = new List<Flight> ();
@@ -449,6 +472,7 @@ public partial class DeckView
 		yield return RunFlights (flights, true);
 
 		//the data: new cards for the used places, and a set on the table again
+		discardSets += foundSets.Count;
 		drawShown = deckOrder.Count - nextCard;
 		int[] before = shownCardIndex.ToArray ();
 		foreach (int slot in used) {

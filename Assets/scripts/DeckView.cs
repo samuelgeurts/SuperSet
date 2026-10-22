@@ -26,13 +26,17 @@ public partial class DeckView : MonoBehaviour
 	List<int[]> boardSets = new List<int[]> (); //all sets on the table, as slot numbers
 	List<int[]> foundSets = new List<int[]> (); //the sets of the table the player already found
 
+	//family mode: one shared board (seed + log of found sets) that everybody plays on; see FamilyState
+	bool familyMode;
+	FamilyState family;
+
 	//select or deselect a clicked card; one card too many is ignored until one is deselected
 	public void ToggleSelection (CardModel card)
 	{
-		if (gameOver || busy) {
+		if (gameOver || busy || askingName) {
 			return;
 		}
-		if (openMenu != TopMenu.None || menuClosedFrame == Time.frameCount) {
+		if (openMenu != TopMenu.None || scoresOpen || menuClosedFrame == Time.frameCount) {
 			CloseMenu (); //a click on a card only closes the open menu
 			return;
 		}
@@ -43,7 +47,7 @@ public partial class DeckView : MonoBehaviour
 				SetRuleOpen (false);
 			}
 			selectedCards.Add (card);
-			card.SetSelected (true, UiStyle.FoundColor (foundSets.Count)); //the color the set will get
+			card.SetSelected (true, NextFoundColor ()); //the color the set will get
 			if (selectedCards.Count == setSize) {
 				CheckSelection ();
 			}
@@ -93,14 +97,23 @@ public partial class DeckView : MonoBehaviour
 			ShowMessage ("You already found that set");
 			return;
 		}
-		foundSets.Add (found);
-		score += SetLogic.PointsPerSet (dimensionCount, setSize);
-		SaveScore ();
-		foreach (int slot in found) {
-			slots [slot].AddFound (UiStyle.FoundColor (foundSets.Count - 1));
+		if (FamilyOnline) {
+			StartCoroutine (PostFamilyClaim (found)); //it counts when the database accepts it
+			return;
 		}
-		numberofSets = boardSets.Count - foundSets.Count;
-		Numberofsets.numberofSets = numberofSets;
+		AcceptFound (found);
+	}
+
+	//a set of the player is found (and, on the online family board, accepted by the database)
+	void AcceptFound (int[] found)
+	{
+		RegisterFound (found, familyMode ? family.localId : null, familyMode ? family.localPlayer : null);
+		if (familyMode) {
+			family.AddClaim (family.localId, family.localPlayer, found);
+		}
+		foreach (int slot in found) {
+			slots [slot].AddFound (FoundColorOf (foundSets.Count - 1));
+		}
 
 		if (numberofSets > 0) {
 			//more sets on the table: the cards stay, also the ones shared with the next set
@@ -140,6 +153,9 @@ public partial class DeckView : MonoBehaviour
 	{
 		if (Screen.width != layoutWidth || Screen.height != layoutHeight) {
 			ApplyLayout ();
+		}
+		if (ruleOpen && Time.time - ruleOpenSince > RuleAutoCloseSeconds) {
+			SetRuleOpen (false);
 		}
 	}
 
