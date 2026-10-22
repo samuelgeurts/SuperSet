@@ -220,16 +220,67 @@ public static class CardArt
 		}
 	}
 
+	//The letters of the logo are masks (Resources/CardBack, made in the lettering of the loading screen: Segoe UI Semibold,
+	//spacing 0.05 em). A mask is a file with the width and the height (2 times 4 bytes) and then one byte of coverage
+	//per pixel, from the top row down. It is drawn over the cover map with the given width, around the height centerY.
+	static bool DrawMask (float[] cover, string name, float width, float centerY)
+	{
+		TextAsset asset = Resources.Load<TextAsset> ("CardBack/" + name);
+		if (asset == null) {
+			return false;
+		}
+		byte[] data = asset.bytes;
+		int sourceWidth = System.BitConverter.ToInt32 (data, 0);
+		int sourceHeight = System.BitConverter.ToInt32 (data, 4);
+		float scale = sourceWidth / width; //source pixels per card pixel
+		int w = Mathf.RoundToInt (width);
+		int h = Mathf.RoundToInt (sourceHeight / scale);
+		int left = Mathf.RoundToInt ((CardWidth - w) / 2f);
+		int bottom = Mathf.RoundToInt (centerY - h / 2f);
+		for (int ty = 0; ty < h; ty++) {
+			for (int tx = 0; tx < w; tx++) {
+				int x = left + tx;
+				int y = bottom + ty;
+				if (x < 0 || x >= CardWidth || y < 0 || y >= CardHeight) {
+					continue;
+				}
+				//the average of the source pixels under this card pixel
+				int sx0 = Mathf.FloorToInt (tx * scale);
+				int sx1 = Mathf.Min (sourceWidth, Mathf.CeilToInt ((tx + 1) * scale));
+				int sy0 = Mathf.FloorToInt ((h - 1 - ty) * scale);
+				int sy1 = Mathf.Min (sourceHeight, Mathf.CeilToInt ((h - ty) * scale));
+				float sum = 0f;
+				int count = 0;
+				for (int sy = sy0; sy < sy1; sy++) {
+					for (int sx = sx0; sx < sx1; sx++) {
+						sum += data [8 + sy * sourceWidth + sx];
+						count++;
+					}
+				}
+				if (count > 0) {
+					int index = y * CardWidth + x;
+					cover [index] = Mathf.Max (cover [index], sum / (count * 255f));
+				}
+			}
+		}
+		return true;
+	}
+
 	//the back of a card: dark blue with a double frame, a fine diagonal pattern and the name of the game in the middle
 	static Sprite MakeBackSprite ()
 	{
 		float[] superCover = new float[CardWidth * CardHeight];
 		float[] setCover = new float[CardWidth * CardHeight];
 		const float textWidth = 232f;
-		float unitSuper = textWidth / WordWidth ("Super");
-		float unitSet = textWidth / WordWidth ("Set");
-		DrawWord (superCover, "Super", (CardWidth - textWidth) / 2f, 283f, unitSuper, 0.095f * unitSuper);
-		DrawWord (setCover, "Set", (CardWidth - textWidth) / 2f, 133f, unitSet, 0.095f * unitSet);
+		if (!DrawMask (superCover, "back-super", textWidth, 305f) || !DrawMask (setCover, "back-set", textWidth, 187f)) {
+			//no masks: the stroke font
+			System.Array.Clear (superCover, 0, superCover.Length);
+			System.Array.Clear (setCover, 0, setCover.Length);
+			float unitSuper = textWidth / WordWidth ("Super");
+			float unitSet = textWidth / WordWidth ("Set");
+			DrawWord (superCover, "Super", (CardWidth - textWidth) / 2f, 283f, unitSuper, 0.095f * unitSuper);
+			DrawWord (setCover, "Set", (CardWidth - textWidth) / 2f, 133f, unitSet, 0.095f * unitSet);
+		}
 
 		Color32[] pixels = new Color32[CardWidth * CardHeight];
 		Color32 body = new Color32 (22, 35, 61, 255);
