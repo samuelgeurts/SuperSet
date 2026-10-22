@@ -31,8 +31,8 @@ public partial class DeckView
 		return clicked && !chosen;
 	}
 
-	//the rule of the game is open at the start; it folds up once the player begins, and the ? button opens it again
-	bool ruleOpen = true;
+	//the rule of the game is folded up at the start; the ? button opens it, and it folds up again by itself
+	bool ruleOpen = false;
 	float ruleOpenSince; //when the rule banner was opened
 	const float RuleAutoCloseSeconds = 15f; //long enough to read it
 
