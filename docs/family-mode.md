@@ -2,7 +2,7 @@
 
 Samuel Geurts (SNG-Solutions)
 
-Status: idee, nog niet gepland of gebouwd. Het bijbehorende ticket staat in het projectbord (epic, Backlog).
+Status: gepland (2026-10-22), nog niet gebouwd. Epic #27 met de fasen als tickets #48-#51 in Backlog.
 Gerelateerd: [Adventure mode](adventure-mode.md) (#26) en de multiplayer-branch (#23, on hold).
 Bij een besluit: werk dit document bij en noteer het ook onder het ticket.
 
@@ -22,11 +22,15 @@ Een soort open multiplayer die niet snel gaat: het bord is zo moeilijk dat je er
 - **Controle op de server.** De setlogica (`SetLogic`) moet ook op de server of in een databasefunctie, anders kan het bord vervuild raken.
 - Mogelijke diensten: Supabase (Postgres) of Firebase, zoals bij Adventure.
 
+## Besluiten (2026-10-22)
+- **Dienst:** Firebase, project `superset-75145`, database Firestore. Het Firebase Unity-SDK ondersteunt WebGL niet, dus het spel praat via REST (`UnityWebRequest`), met anonieme login (Firebase Auth REST).
+- **Openbaar of privé:** beginnen met één openbaar bord (`boards/main`). Alles hangt onder een bord-ID, zodat eigen borden per gezin later alleen een extra ID zijn (fase 4).
+- **Samen of tegen elkaar:** iedereen kan zien hoeveel sets elke speler heeft gevonden (scorelijst per speler), plus de kleur per vinder op het bord.
+- **Identiteit:** zelfgekozen bijnaam met anonieme login.
+
 ## Bewust kiezen (open)
-- **Privé of openbaar:** een eigen bord per gezin via een code of link (seed = familiecode), of één openbaar bord voor iedereen (dan zijn moderatie en namen nodig).
-- **Samen of tegen elkaar:** samenwerkend, een scorebord, of beide tonen.
-- **Wat als het bord klaar of vast is:** een nieuw bord starten ("seizoen 2") en het oude bewaren als trofee.
-- **Identiteit:** een zelfgekozen bijnaam zonder account is voor een gezin genoeg; valsspelen is bij familie nauwelijks een punt.
+- **Controle op de server (fase 3):** Firestore security rules (gratis Spark-plan; de setregel en een create-only document per gebruikte kaart, deckvolgorde in het bordbestand) of een Cloud Function (Blaze, betaalkaart nodig, omdat het Spark-plan geen servercode toelaat). Besluit bij de start van fase 3; het bord gaat pas openbaar na die fase.
+- **Wat als het bord klaar of vast is:** een nieuw bord starten ("seizoen 2") en het oude bewaren als trofee (fase 4).
 
 ## Verhouding tot de rest
 De familiemodus is de **kleinste test voor de backend** die Adventure ook nodig heeft: één bord, geen kaart, geen moeilijkheidsladder. Daarmee test je spelers zonder account, het logboek met zetten, de controle op de server en de seed op een schaal die je kunt overzien.
@@ -34,7 +38,7 @@ De familiemodus is de **kleinste test voor de backend** die Adventure ook nodig 
 Voorgestelde volgorde: eerst de familiemodus als eerste backend, daarna Adventure fase 2 erbovenop. Live multiplayer (#23) kan on hold blijven; een paar onderdelen (bord uit seed en deck, gedeelde score) zijn te hergebruiken.
 
 ## Fasen
-- [ ] **1. Bord uit seed en logboek, lokaal:** het bord opbouwen uit een seed en een lijst gevonden sets; kleur per vinder. Geen database.
-- [ ] **2. Database:** bord, spelers (bijnaam, anoniem) en logboek opslaan; het bord laden en vernieuwen.
-- [ ] **3. Controle op de server:** claims valideren, dubbele claims afhandelen.
-- [ ] **4. Gezinnen:** een eigen bord per code of link; seizoenen.
+- [ ] **1. Bord uit seed en logboek, lokaal (#48):** het bord opbouwen uit een seed en een lijst gevonden sets; kleur per vinder en sets per speler. Geen database.
+- [ ] **2. Database (#49):** bord, spelers (bijnaam, anoniem) en logboek opslaan in Firestore; het bord laden en vernieuwen.
+- [ ] **3. Controle op de server (#50):** claims valideren, dubbele claims afhandelen.
+- [ ] **4. Gezinnen (#51):** een eigen bord per code of link; seizoenen.
