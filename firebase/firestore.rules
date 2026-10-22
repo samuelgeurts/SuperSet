@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Rules of the family board (phase 2). Everybody who is signed in (anonymously) may read the board and write new
+// claims, but a claim can never be changed or deleted afterwards. Phase 3 adds the check that a claim is really a set.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /boards/{boardId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['seed'])
+        && request.resource.data.seed is int;
+
+      match /claims/{claimId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+          && claimId.matches('[0-9]{6}')
+          && request.resource.data.keys().hasOnly(['n', 'player', 'slots', 'uid'])
+          && request.resource.data.n is int
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.player is string
+          && request.resource.data.player.size() > 0
+          && request.resource.data.player.size() <= 14
+          && request.resource.data.slots is string
+          && request.resource.data.slots.matches('[0-9]{1,2}(,[0-9]{1,2}){3}');
+      }
+    }
+  }
+}

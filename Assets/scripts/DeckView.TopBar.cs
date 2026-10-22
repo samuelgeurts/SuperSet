@@ -214,6 +214,9 @@ public partial class DeckView
 		}
 		float y = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0) + MessageHeight;
 		List<string> names = new List<string> (family.players);
+		if (!names.Contains (family.localPlayer)) {
+			names.Add (family.localPlayer); //the player is in the list before the first set
+		}
 		names.Sort ((a, b) => family.Count (b).CompareTo (family.Count (a)));
 		float x = 10;
 		for (int i = 0; i < names.Count; i++) {
@@ -245,6 +248,7 @@ public partial class DeckView
 		DrawTopBar (width);
 		DrawPileCounts (scale);
 		DrawTopMenu (width);
+		DrawNameBox (width, height);
 
 		if (gameOver && !busy) {
 			float bw = Mathf.Min (320f, width - 16f);
@@ -253,7 +257,8 @@ public partial class DeckView
 			GUI.Box (box, "", UiStyle.PanelStyle);
 			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), familyMode ? "Board finished" : "Deck finished", UiStyle.TitleStyle);
 			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), familyMode ? "Your sets: " + family.Count (family.localPlayer) : "Score: " + score, UiStyle.ValueStyle);
-			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Continue", UiStyle.ActionButtonStyle)) {
+			//a new season of the online board is not there yet; the offline board starts again with a new seed
+			if (!FamilyOnline && GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Continue", UiStyle.ActionButtonStyle)) {
 				NewGame ();
 			}
 		}

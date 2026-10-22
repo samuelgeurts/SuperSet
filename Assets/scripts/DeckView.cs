@@ -97,6 +97,16 @@ public partial class DeckView : MonoBehaviour
 			ShowMessage ("You already found that set");
 			return;
 		}
+		if (FamilyOnline) {
+			StartCoroutine (PostFamilyClaim (found)); //it counts when the database accepts it
+			return;
+		}
+		AcceptFound (found);
+	}
+
+	//a set of the player is found (and, on the online family board, accepted by the database)
+	void AcceptFound (int[] found)
+	{
 		RegisterFound (found, familyMode ? family.localPlayer : null);
 		if (familyMode) {
 			family.AddClaim (family.localPlayer, found);

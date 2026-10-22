@@ -30,6 +30,7 @@ public class FamilyClaim
 {
 	public string player;
 	public int[] slots;
+	public int n = -1; //number in the log of the database; -1 for a claim that is not in the database
 
 	public FamilyClaim (string player, int[] slots)
 	{
@@ -43,12 +44,14 @@ public class FamilyClaim
 //and how many sets each of them found.
 public class FamilyState
 {
-	public const string BoardId = "main"; //phase 2: one board per id in the database; for now there is one
-	public const int BaseSeed = 1022; //phase 2: the seed comes from the board document
+	public const int BaseSeed = 1022; //the seed of the first board
 	const string SeasonKey = "FamilySeason";
 	const string LogKey = "FamilyLog";
 
-	public int season;
+	public int season; //offline only; the online board is one board for now
+	public int seed;
+	public bool online; //the log is in the database (FamilyBackend) and not in PlayerPrefs
+	public int nextN; //online: the number the next claim gets in the database
 	public SeededRandom random;
 	public string localPlayer = "You";
 
@@ -57,18 +60,29 @@ public class FamilyState
 	public List<FamilyClaim> log = new List<FamilyClaim> ();
 	public List<string> foundBy = new List<string> (); //finder of every set on the table now, parallel to the found sets of DeckView
 
-	public int Seed {
-		get { return BaseSeed + season; }
-	}
-
-	//the board of the current season, with the random generator at its start; the log is replayed by DeckView
+	//the offline board of the current season (no database), with the random generator at its start; the log is replayed by DeckView
 	public static FamilyState Create ()
 	{
 		FamilyState state = new FamilyState ();
 		state.season = PlayerPrefs.GetInt (SeasonKey, 0);
-		state.random = new SeededRandom (state.Seed);
-		state.AddPlayer (state.localPlayer);
+		state.seed = BaseSeed + state.season;
+		state.random = new SeededRandom (state.seed);
 		state.log = Parse (PlayerPrefs.GetString (LogKey + state.season, ""));
+		return state;
+	}
+
+	//the board from the database: its seed and the claims so far
+	public static FamilyState CreateOnline (string localPlayer, int seed, List<FamilyClaim> claims)
+	{
+		FamilyState state = new FamilyState ();
+		state.online = true;
+		state.localPlayer = localPlayer;
+		state.seed = seed;
+		state.random = new SeededRandom (seed);
+		state.log = claims;
+		foreach (FamilyClaim claim in claims) {
+			state.nextN = Mathf.Max (state.nextN, claim.n + 1);
+		}
 		return state;
 	}
 
@@ -82,11 +96,10 @@ public class FamilyState
 	//start the table again from its seed, before the log is replayed (the log itself stays)
 	public void ResetPlay ()
 	{
-		random = new SeededRandom (Seed);
+		random = new SeededRandom (seed);
 		players.Clear ();
 		counts.Clear ();
 		foundBy.Clear ();
-		AddPlayer (localPlayer);
 	}
 
 	public void AddPlayer (string name)
@@ -97,9 +110,11 @@ public class FamilyState
 		}
 	}
 
+	//the color number of a player: the order in which the players found their first set; a player without a set yet gets the next one
 	public int PlayerIndex (string name)
 	{
-		return Mathf.Max (0, players.IndexOf (name));
+		int index = players.IndexOf (name);
+		return index >= 0 ? index : players.Count;
 	}
 
 	public int Count (string name)
@@ -108,11 +123,14 @@ public class FamilyState
 		return counts.TryGetValue (name, out count) ? count : 0;
 	}
 
+	//a claim of the offline board is kept on this device
 	public void AddClaim (string player, int[] slots)
 	{
 		log.Add (new FamilyClaim (player, slots));
-		PlayerPrefs.SetString (LogKey + season, Format (log));
-		PlayerPrefs.Save ();
+		if (!online) {
+			PlayerPrefs.SetString (LogKey + season, Format (log));
+			PlayerPrefs.Save ();
+		}
 	}
 
 	//"Anna|3,5,9,12;Ben|0,4,8,13"
@@ -149,6 +167,6 @@ public class FamilyState
 	//a player name can not hold the separators of the log
 	public static string CleanName (string name)
 	{
-		return name.Replace ("|", "").Replace (";", "").Replace (",", "").Trim ();
+		return name.Replace ("|", "").Replace (";", "").Replace (",", "").Replace ("\"", "").Replace ("\\", "").Trim ();
 	}
 }

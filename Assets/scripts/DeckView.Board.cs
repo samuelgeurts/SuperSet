@@ -91,7 +91,8 @@ public partial class DeckView
 	void StartNewBoard ()
 	{
 		if (familyMode) {
-			family = FamilyState.Create ();
+			family = pendingFamily != null ? pendingFamily : FamilyState.Create ();
+			pendingFamily = null;
 		}
 		DealFreshTable ();
 		if (familyMode) {
@@ -248,7 +249,7 @@ public partial class DeckView
 	//A claim that is no longer valid, for instance because the cards were replaced, is skipped.
 	void ReplayFamilyLog ()
 	{
-		if (family.log.Count == 0 && FamilyDemo) {
+		if (family.log.Count == 0 && FamilyDemo && !family.online) {
 			AddDemoClaims ();
 			family.ResetPlay ();
 			DealFreshTable (); //the same table again, now built only from the log
@@ -320,11 +321,24 @@ public partial class DeckView
 			dimensionCount = SetLogic.Dimensions; //the family board is always the hardest one
 			setSize = 4;
 		} else {
-			dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", 5), 3, 5);
-			setSize = Mathf.Clamp (PlayerPrefs.GetInt ("SetSize", 4), 3, 4);
+			UseClassicDifficulty ();
 		}
 		message = "";
+		if (on && FirebaseConfig.Configured && !boards.ContainsKey (BoardKey ())) {
+			StartFamilyConnect (); //the table comes from the database
+			return;
+		}
 		LoadBoard ();
+		if (on && FamilyOnline) {
+			StartFamilyLoop (); //the table was kept: catch up with the sets of the others
+		}
+	}
+
+	//the difficulty the player chose for the classic game
+	void UseClassicDifficulty ()
+	{
+		dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", 5), 3, 5);
+		setSize = Mathf.Clamp (PlayerPrefs.GetInt ("SetSize", 4), 3, 4);
 	}
 
 	//after "Deck finished": a new table for the same difficulty (the family board starts a new season with a new seed)
