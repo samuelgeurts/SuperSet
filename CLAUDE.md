@@ -21,3 +21,7 @@ werkafspraken in `~/.claude/CLAUDE.md`.
 - **Wachten op builds:** een Unity-build duurt 10 tot 15 minuten. Start hem met
   `run_in_background` en wacht op de melding in plaats van te pollen met `sleep`-lussen
   (elke aanroep kost context). Eén korte tussenstand bij de start is genoeg.
+- **APK met vaste downloadlink:** upload bij elke GitHub-release de APK twee keer: als
+  `SuperSet-<versie>.apk` en als `SuperSet.apk` (vaste naam). De link
+  `https://github.com/samuelgeurts/SuperSet/releases/latest/download/SuperSet.apk` geeft dan altijd
+  de nieuwste.
