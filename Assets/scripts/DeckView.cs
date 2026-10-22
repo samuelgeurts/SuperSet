@@ -26,6 +26,10 @@ public partial class DeckView : MonoBehaviour
 	List<int[]> boardSets = new List<int[]> (); //all sets on the table, as slot numbers
 	List<int[]> foundSets = new List<int[]> (); //the sets of the table the player already found
 
+	//family mode: one shared board (seed + log of found sets) that everybody plays on; see FamilyState
+	bool familyMode;
+	FamilyState family;
+
 	//select or deselect a clicked card; one card too many is ignored until one is deselected
 	public void ToggleSelection (CardModel card)
 	{
@@ -43,7 +47,7 @@ public partial class DeckView : MonoBehaviour
 				SetRuleOpen (false);
 			}
 			selectedCards.Add (card);
-			card.SetSelected (true, UiStyle.FoundColor (foundSets.Count)); //the color the set will get
+			card.SetSelected (true, NextFoundColor ()); //the color the set will get
 			if (selectedCards.Count == setSize) {
 				CheckSelection ();
 			}
@@ -93,14 +97,13 @@ public partial class DeckView : MonoBehaviour
 			ShowMessage ("You already found that set");
 			return;
 		}
-		foundSets.Add (found);
-		score += SetLogic.PointsPerSet (dimensionCount, setSize);
-		SaveScore ();
-		foreach (int slot in found) {
-			slots [slot].AddFound (UiStyle.FoundColor (foundSets.Count - 1));
+		RegisterFound (found, familyMode ? family.localPlayer : null);
+		if (familyMode) {
+			family.AddClaim (family.localPlayer, found);
 		}
-		numberofSets = boardSets.Count - foundSets.Count;
-		Numberofsets.numberofSets = numberofSets;
+		foreach (int slot in found) {
+			slots [slot].AddFound (FoundColorOf (foundSets.Count - 1));
+		}
 
 		if (numberofSets > 0) {
 			//more sets on the table: the cards stay, also the ones shared with the next set

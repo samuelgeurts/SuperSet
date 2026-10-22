@@ -16,13 +16,14 @@ public partial class DeckView
 		public bool gameOver;
 		public int discardCount; //cards on the discard pile
 		public int discardTop; //card on top of the discard pile, -1 when it is empty
+		public FamilyState family; //only the family board has one
 	}
 
 	Dictionary<int, Board> boards = new Dictionary<int, Board> ();
 
 	int BoardKey ()
 	{
-		return dimensionCount * 10 + setSize;
+		return familyMode ? 1000 : dimensionCount * 10 + setSize;
 	}
 
 	int boardSize; //cards on the table
@@ -49,6 +50,7 @@ public partial class DeckView
 			gameOver = board.gameOver;
 			discardCount = board.discardCount;
 			discardTopIndex = board.discardTop;
+			family = board.family;
 			for (int slot = 0; slot < boardSize; slot++) {
 				SetDimensions (slot);
 			}
@@ -73,6 +75,7 @@ public partial class DeckView
 		board.gameOver = gameOver;
 		board.discardCount = discardCount;
 		board.discardTop = discardTopIndex;
+		board.family = family;
 		boards [BoardKey ()] = board;
 
 		ClearSelection ();
@@ -87,7 +90,19 @@ public partial class DeckView
 	//deal a new table: shuffle the deck and put the first cards on it
 	void StartNewBoard ()
 	{
-		deck.Shuffle (dimensionCount, setSize);
+		if (familyMode) {
+			family = FamilyState.Create ();
+		}
+		DealFreshTable ();
+		if (familyMode) {
+			ReplayFamilyLog ();
+		}
+	}
+
+	//a table with a shuffled deck and its first cards; the family board uses the seed for it
+	void DealFreshTable ()
+	{
+		deck.Shuffle (dimensionCount, setSize, familyMode ? family.random : null);
 		deckOrder = new List<int> (deck.GetCards ());
 		shownCardIndex = new List<int> ();
 		slotActive = new bool[MaxBoardSize];
@@ -128,9 +143,12 @@ public partial class DeckView
 	void EnsureSetOnBoard ()
 	{
 		foundSets.Clear ();
+		if (familyMode) {
+			family.foundBy.Clear ();
+		}
 		FindSets ();
 		while (boardSets.Count == 0 && nextCard < deckOrder.Count) {
-			int slot = Random.Range (0, boardSize);
+			int slot = familyMode ? family.random.Next (boardSize) : Random.Range (0, boardSize);
 			if (slotActive [slot]) {
 				ChangeCard (slot);
 				FindSets ();
@@ -161,13 +179,118 @@ public partial class DeckView
 			cardCopy.SetActive (slotActive [slot]);
 		}
 
-		//the sets that were found already keep their colored border
+		ShowFoundBorders ();
+		ApplyLayout ();
+	}
+
+	//the sets that were found already keep their colored border
+	void ShowFoundBorders ()
+	{
 		for (int i = 0; i < foundSets.Count; i++) {
 			foreach (int slot in foundSets [i]) {
-				slots [slot].AddFound (UiStyle.FoundColor (i));
+				slots [slot].AddFound (FoundColorOf (i));
 			}
 		}
-		ApplyLayout ();
+	}
+
+	//border color of a found set: one per set, or (family mode) the color of the player who found it
+	Color FoundColorOf (int foundIndex)
+	{
+		if (familyMode) {
+			return UiStyle.FoundColor (family.PlayerIndex (family.foundBy [foundIndex]));
+		}
+		return UiStyle.FoundColor (foundIndex);
+	}
+
+	//the color the set that is being picked will get
+	Color NextFoundColor ()
+	{
+		if (familyMode) {
+			return UiStyle.FoundColor (family.PlayerIndex (family.localPlayer));
+		}
+		return UiStyle.FoundColor (foundSets.Count);
+	}
+
+	//a set was found, by the player or read from the log: keep it, count it and see how many sets are left on the table
+	void RegisterFound (int[] found, string player)
+	{
+		foundSets.Add (found);
+		if (familyMode) {
+			family.foundBy.Add (player);
+			family.AddPlayer (player);
+			family.counts [player]++;
+		} else {
+			score += SetLogic.PointsPerSet (dimensionCount, setSize);
+			SaveScore ();
+		}
+		numberofSets = boardSets.Count - foundSets.Count;
+		Numberofsets.numberofSets = numberofSets;
+	}
+
+	//the cards of a claim in the log must really form a set of cards on the table that was not found yet
+	bool ClaimIsValid (int[] claim)
+	{
+		if (gameOver || claim.Length != setSize) {
+			return false;
+		}
+		int[] indexes = new int[setSize];
+		for (int i = 0; i < setSize; i++) {
+			int slot = claim [i];
+			if (slot < 0 || slot >= boardSize || !slotActive [slot] || System.Array.IndexOf (claim, slot) != i) {
+				return false;
+			}
+			indexes [i] = shownCardIndex [slot];
+		}
+		return SetLogic.IsSetCards (indexes, dimensionCount) && !IsFound (claim);
+	}
+
+	//build the shared table from the log: every claim is replayed on the data only (no animation).
+	//A claim that is no longer valid, for instance because the cards were replaced, is skipped.
+	void ReplayFamilyLog ()
+	{
+		if (family.log.Count == 0 && FamilyDemo) {
+			AddDemoClaims ();
+			family.ResetPlay ();
+			DealFreshTable (); //the same table again, now built only from the log
+		}
+		foreach (FamilyClaim claim in new List<FamilyClaim> (family.log)) {
+			int[] slotList = (int[])claim.slots.Clone ();
+			System.Array.Sort (slotList);
+			if (!ClaimIsValid (slotList)) {
+				continue;
+			}
+			RegisterFound (slotList, claim.player);
+			if (numberofSets <= 0) {
+				ReplaceFoundCardsData ();
+			}
+		}
+	}
+
+	//phase 1 only: no database yet, so two made-up players find a few sets to show colors and the player list.
+	//They play on the fresh table and their claims go in the log like real ones. Phase 2 removes this.
+	const bool FamilyDemo = true;
+
+	void AddDemoClaims ()
+	{
+		string[] bots = { "Anna", "Ben" };
+		for (int n = 0; n < 9 && boardSets.Count - foundSets.Count > 0; n++) {
+			int[] set = null;
+			foreach (int[] candidate in boardSets) {
+				if (!IsFound (candidate)) {
+					set = candidate;
+					break;
+				}
+			}
+			if (set == null || (n >= 5 && boardSets.Count - foundSets.Count < 2)) {
+				break;
+			}
+			string bot = bots [n % bots.Length];
+			family.AddClaim (bot, set);
+			RegisterFound (set, bot);
+			if (numberofSets <= 0) {
+				ReplaceFoundCardsData ();
+			}
+		}
 	}
 
 	//change the difficulty; the table of that difficulty stays as the player left it
@@ -185,13 +308,35 @@ public partial class DeckView
 		LoadBoard ();
 	}
 
-	//after "Deck finished": a new table for the same difficulty
+	//switch between the classic game and the family board; both keep their table
+	public void SetFamilyMode (bool on)
+	{
+		if (busy || on == familyMode) {
+			return;
+		}
+		StoreBoard ();
+		familyMode = on;
+		if (on) {
+			dimensionCount = SetLogic.Dimensions; //the family board is always the hardest one
+			setSize = 4;
+		} else {
+			dimensionCount = Mathf.Clamp (PlayerPrefs.GetInt ("Dimensions", 5), 3, 5);
+			setSize = Mathf.Clamp (PlayerPrefs.GetInt ("SetSize", 4), 3, 4);
+		}
+		message = "";
+		LoadBoard ();
+	}
+
+	//after "Deck finished": a new table for the same difficulty (the family board starts a new season with a new seed)
 	void NewGame ()
 	{
 		if (busy) {
 			return;
 		}
 		StoreBoard ();
+		if (familyMode) {
+			FamilyState.NextSeason ();
+		}
 		boards.Remove (BoardKey ());
 		message = "";
 		LoadBoard ();

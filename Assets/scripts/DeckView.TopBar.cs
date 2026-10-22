@@ -10,6 +10,11 @@ public partial class DeckView
 	//the rule of the game, for the difficulty that is chosen now
 	string RuleText ()
 	{
+		if (familyMode) {
+			return "Family board: one board for everybody, always the hardest. Pick 4 cards where every attribute " +
+			"(color, shape, number, fill and size) is the same on all cards OR different on all cards. " +
+			"Every player has a border color; the list shows how many sets each player found.";
+		}
 		string names = "";
 		for (int d = 0; d < dimensionCount; d++) {
 			names += (d == 0 ? "" : (d == dimensionCount - 1 ? " and " : ", ")) + dimensionNames [d];
@@ -80,16 +85,16 @@ public partial class DeckView
 		if (GUI.Button (new Rect (8, 6, HelpButtonSize, ButtonHeight), "?", ruleOpen ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle)) {
 			SetRuleOpen (!ruleOpen);
 		}
-		GUI.Label (new Rect (48, 4, 70, 14), "Score", UiStyle.LabelStyle);
-		GUI.Label (new Rect (48, 17, 90, 24), score.ToString (), UiStyle.ScoreStyle16);
+		GUI.Label (new Rect (48, 4, 70, 14), familyMode ? "Sets" : "Score", UiStyle.LabelStyle);
+		GUI.Label (new Rect (48, 17, 90, 24), (familyMode ? family.Count (family.localPlayer) : score).ToString (), UiStyle.ScoreStyle16);
 
-		//the difficulty and the game mode wait while cards are moving
-		GUI.enabled = !busy;
+		//the difficulty and the game mode wait while cards are moving; the family board has a fixed difficulty
+		GUI.enabled = !busy && !familyMode;
 
 		//middle: the difficulty
 		float diffWidth = Portrait ? 124 : 300;
 		Rect diffRect = new Rect ((width - diffWidth) / 2, 6, diffWidth, ButtonHeight);
-		string diffText = DifficultyName (dimensionCount, setSize) + (Portrait ? "  " + dimensionCount + "·" + setSize : "  ·  " + dimensionCount + " attributes  ·  " + setSize + " cards");
+		string diffText = (familyMode ? "Family" : DifficultyName (dimensionCount, setSize)) + (Portrait ? "  " + dimensionCount + "·" + setSize : "  ·  " + dimensionCount + " attributes  ·  " + setSize + " cards");
 		if (GUI.Button (diffRect, diffText, openMenu == TopMenu.Difficulty ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle)) {
 			bool wasOpen = openMenu == TopMenu.Difficulty;
 			openMenu = wasOpen ? TopMenu.None : TopMenu.Difficulty;
@@ -97,6 +102,7 @@ public partial class DeckView
 		GUI.DrawTexture (new Rect (diffRect.xMax - 18, diffRect.y + 11, 10, 10), UiStyle.Chevron);
 
 		//right: the game mode; there is room next to it for an account later
+		GUI.enabled = !busy;
 		Rect modeRect = new Rect (width - 8 - ButtonHeight, 6, ButtonHeight, ButtonHeight);
 		if (GUI.Button (modeRect, "", openMenu == TopMenu.Mode ? UiStyle.ChosenButtonStyle : UiStyle.ButtonStyle)) {
 			openMenu = openMenu == TopMenu.Mode ? TopMenu.None : TopMenu.Mode;
@@ -160,11 +166,20 @@ public partial class DeckView
 			}
 		} else {
 			GUI.Label (new Rect (x, y, w2, 18), "Game mode", UiStyle.LabelStyle);
-			MenuButton (new Rect (x, y + 20, w2, ButtonHeight), "Classic", true);
-			string[] soon = { "Adventure", "Family board", "Online" };
+			if (MenuButton (new Rect (x, y + 20, w2, ButtonHeight), "Classic", !familyMode)) {
+				SetFamilyMode (false);
+				CloseMenu ();
+				return;
+			}
+			if (MenuButton (new Rect (x, y + 20 + ButtonStep, w2, ButtonHeight), "Family board", familyMode)) {
+				SetFamilyMode (true);
+				CloseMenu ();
+				return;
+			}
+			string[] soon = { "Adventure", "Online" };
 			GUI.enabled = false;
 			for (int i = 0; i < soon.Length; i++) {
-				GUI.Button (new Rect (x, y + 20 + (i + 1) * ButtonStep, w2, ButtonHeight), soon [i] + "  (soon)", UiStyle.ButtonStyle);
+				GUI.Button (new Rect (x, y + 20 + (i + 2) * ButtonStep, w2, ButtonHeight), soon [i] + "  (soon)", UiStyle.ButtonStyle);
 			}
 			GUI.enabled = true;
 		}
@@ -191,6 +206,29 @@ public partial class DeckView
 		}
 	}
 
+	//family board: every player with the color of their sets and the number of sets they found, most sets first
+	void DrawPlayers (float width)
+	{
+		if (!familyMode) {
+			return;
+		}
+		float y = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0) + MessageHeight;
+		List<string> names = new List<string> (family.players);
+		names.Sort ((a, b) => family.Count (b).CompareTo (family.Count (a)));
+		float x = 10;
+		for (int i = 0; i < names.Count; i++) {
+			string text = names [i] + "  " + family.Count (names [i]);
+			float textWidth = UiStyle.LabelStyle.CalcSize (new GUIContent (text)).x;
+			if (x + 14 + textWidth > width - 8 && i > 0) {
+				GUI.Label (new Rect (x, y, 60, PlayersHeight), "+" + (names.Count - i), UiStyle.LabelStyle);
+				break;
+			}
+			DrawSquare (new Rect (x, y + 6, 10, 10), UiStyle.FoundColor (family.PlayerIndex (names [i])));
+			GUI.Label (new Rect (x + 14, y + 2, textWidth + 4, PlayersHeight - 2), text, UiStyle.LabelStyle);
+			x += 14 + textWidth + 14;
+		}
+	}
+
 	void OnGUI ()
 	{
 		UiStyle.EnsureStyles ();
@@ -203,6 +241,7 @@ public partial class DeckView
 
 		DrawRule (width);
 		DrawMessage (width);
+		DrawPlayers (width);
 		DrawTopBar (width);
 		DrawPileCounts (scale);
 		DrawTopMenu (width);
@@ -212,8 +251,8 @@ public partial class DeckView
 			float bh = 170;
 			Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);
 			GUI.Box (box, "", UiStyle.PanelStyle);
-			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), "Deck finished", UiStyle.TitleStyle);
-			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), "Score: " + score, UiStyle.ValueStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), familyMode ? "Board finished" : "Deck finished", UiStyle.TitleStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), familyMode ? "Your sets: " + family.Count (family.localPlayer) : "Score: " + score, UiStyle.ValueStyle);
 			if (GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Continue", UiStyle.ActionButtonStyle)) {
 				NewGame ();
 			}

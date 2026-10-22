@@ -15,6 +15,7 @@ public partial class DeckView
 	const float ButtonStep = 36;
 	const float HelpButtonSize = 32;
 	const float MessageHeight = 22;
+	const float PlayersHeight = 22; //the list of players of the family board
 
 	//size of one GUI unit in screen pixels, so the menu keeps its size relative to the screen on a phone
 	static float UiScale ()
@@ -26,7 +27,7 @@ public partial class DeckView
 	//the part of the screen for the cards, in GUI units (y from the top): what the top bar leaves free
 	Rect Playfield (float w, float h)
 	{
-		float top = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0) + MessageHeight;
+		float top = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0) + MessageHeight + (familyMode ? PlayersHeight : 0);
 		return new Rect (4, top, w - 8, h - top - 4);
 	}
 

@@ -23,7 +23,8 @@ public class DeckModel : MonoBehaviour {
 //	}
 
 	//dimensions = 3..5 and setSize = 3 or 4 (values per dimension): the deck only holds the cards that fit
-	public void Shuffle(int dimensions = SetLogic.Dimensions, int setSize = 4) {
+	//with a SeededRandom the order is the same every time (family board); without it the order is random
+	public void Shuffle(int dimensions = SetLogic.Dimensions, int setSize = 4, SeededRandom seeded = null) {
 		if (cards == null) {
 			cards = new List<int> ();
 		} else {
@@ -39,7 +40,7 @@ public class DeckModel : MonoBehaviour {
 		int n = cards.Count;
 		while (n > 1) {
 			n--;
-			int k = Random.Range (0, n + 1);
+			int k = seeded != null ? seeded.Next (n + 1) : Random.Range (0, n + 1);
 			int temp = cards [k];
 			cards [k] = cards [n];
 			cards [n] = temp;
