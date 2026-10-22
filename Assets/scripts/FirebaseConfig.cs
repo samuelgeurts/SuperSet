@@ -6,7 +6,7 @@ public static class FirebaseConfig
 
 	//The web API key of the Firebase web app (Project settings > Your apps). It is no secret: it only says which project
 	//the requests are for; the Firestore rules protect the data. While it is empty the family board works offline only.
-	public const string ApiKey = "";
+	public const string ApiKey = "AIzaSyAcG__UHESXVRpRJti3d4KljoboI6THLwA";
 
 	public const string BoardId = "main"; //one public board for now; other boards (per family) come with phase 4
 
