@@ -207,19 +207,19 @@ public partial class DeckView
 	Color NextFoundColor ()
 	{
 		if (familyMode) {
-			return UiStyle.FoundColor (family.PlayerIndex (family.localPlayer));
+			return UiStyle.FoundColor (family.PlayerIndex (family.localId));
 		}
 		return UiStyle.FoundColor (foundSets.Count);
 	}
 
 	//a set was found, by the player or read from the log: keep it, count it and see how many sets are left on the table
-	void RegisterFound (int[] found, string player)
+	void RegisterFound (int[] found, string playerId, string playerName)
 	{
 		foundSets.Add (found);
 		if (familyMode) {
-			family.foundBy.Add (player);
-			family.AddPlayer (player);
-			family.counts [player]++;
+			family.foundBy.Add (playerId);
+			family.AddPlayer (playerId, playerName);
+			family.counts [playerId]++;
 		} else {
 			score += SetLogic.PointsPerSet (dimensionCount, setSize);
 			SaveScore ();
@@ -260,7 +260,7 @@ public partial class DeckView
 			if (!ClaimIsValid (slotList)) {
 				continue;
 			}
-			RegisterFound (slotList, claim.player);
+			RegisterFound (slotList, claim.uid, claim.player);
 			if (numberofSets <= 0) {
 				ReplaceFoundCardsData ();
 			}
@@ -286,8 +286,8 @@ public partial class DeckView
 				break;
 			}
 			string bot = bots [n % bots.Length];
-			family.AddClaim (bot, set);
-			RegisterFound (set, bot);
+			family.AddClaim (bot, bot, set);
+			RegisterFound (set, bot, bot);
 			if (numberofSets <= 0) {
 				ReplaceFoundCardsData ();
 			}

@@ -199,7 +199,8 @@ public class FamilyBackend
 				return null;
 			}
 		}
-		FamilyClaim claim = new FamilyClaim (f.player.stringValue, slots);
+		string claimUid = f.uid != null && !string.IsNullOrEmpty (f.uid.stringValue) ? f.uid.stringValue : f.player.stringValue;
+		FamilyClaim claim = new FamilyClaim (claimUid, f.player.stringValue, slots);
 		claim.n = int.Parse (f.n.integerValue);
 		return claim;
 	}

@@ -33,7 +33,7 @@ public partial class DeckView : MonoBehaviour
 	//select or deselect a clicked card; one card too many is ignored until one is deselected
 	public void ToggleSelection (CardModel card)
 	{
-		if (gameOver || busy) {
+		if (gameOver || busy || askingName) {
 			return;
 		}
 		if (openMenu != TopMenu.None || menuClosedFrame == Time.frameCount) {
@@ -107,9 +107,9 @@ public partial class DeckView : MonoBehaviour
 	//a set of the player is found (and, on the online family board, accepted by the database)
 	void AcceptFound (int[] found)
 	{
-		RegisterFound (found, familyMode ? family.localPlayer : null);
+		RegisterFound (found, familyMode ? family.localId : null, familyMode ? family.localPlayer : null);
 		if (familyMode) {
-			family.AddClaim (family.localPlayer, found);
+			family.AddClaim (family.localId, family.localPlayer, found);
 		}
 		foreach (int slot in found) {
 			slots [slot].AddFound (FoundColorOf (foundSets.Count - 1));

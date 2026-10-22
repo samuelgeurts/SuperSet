@@ -86,7 +86,7 @@ public partial class DeckView
 			SetRuleOpen (!ruleOpen);
 		}
 		GUI.Label (new Rect (48, 4, 70, 14), familyMode ? "Sets" : "Score", UiStyle.LabelStyle);
-		GUI.Label (new Rect (48, 17, 90, 24), (familyMode ? family.Count (family.localPlayer) : score).ToString (), UiStyle.ScoreStyle16);
+		GUI.Label (new Rect (48, 17, 90, 24), (familyMode ? family.Count (family.localId) : score).ToString (), UiStyle.ScoreStyle16);
 
 		//the difficulty and the game mode wait while cards are moving; the family board has a fixed difficulty
 		GUI.enabled = !busy && !familyMode;
@@ -132,7 +132,7 @@ public partial class DeckView
 			panel = new Rect ((width - w) / 2, BarHeight + 2, w, 252);
 		} else {
 			float w = 210;
-			panel = new Rect (width - 8 - w, BarHeight + 2, w, 188);
+			panel = new Rect (width - 8 - w, BarHeight + 2, w, FamilyOnline ? 224 : 188);
 		}
 
 		//a click outside the menu and the two buttons closes it
@@ -182,6 +182,11 @@ public partial class DeckView
 				GUI.Button (new Rect (x, y + 20 + (i + 2) * ButtonStep, w2, ButtonHeight), soon [i] + "  (soon)", UiStyle.ButtonStyle);
 			}
 			GUI.enabled = true;
+			if (FamilyOnline && GUI.Button (new Rect (x, y + 20 + 4 * ButtonStep, w2, ButtonHeight), "Change name", UiStyle.ButtonStyle)) {
+				StartRename ();
+				CloseMenu ();
+				return;
+			}
 		}
 	}
 
@@ -213,14 +218,14 @@ public partial class DeckView
 			return;
 		}
 		float y = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0) + MessageHeight;
-		List<string> names = new List<string> (family.players);
-		if (!names.Contains (family.localPlayer)) {
-			names.Add (family.localPlayer); //the player is in the list before the first set
+		List<string> names = new List<string> (family.players); //the ids of the players
+		if (!names.Contains (family.localId)) {
+			names.Add (family.localId); //the player is in the list before the first set
 		}
 		names.Sort ((a, b) => family.Count (b).CompareTo (family.Count (a)));
 		float x = 10;
 		for (int i = 0; i < names.Count; i++) {
-			string text = names [i] + "  " + family.Count (names [i]);
+			string text = family.Name (names [i]) + "  " + family.Count (names [i]);
 			float textWidth = UiStyle.LabelStyle.CalcSize (new GUIContent (text)).x;
 			if (x + 14 + textWidth > width - 8 && i > 0) {
 				GUI.Label (new Rect (x, y, 60, PlayersHeight), "+" + (names.Count - i), UiStyle.LabelStyle);
@@ -256,7 +261,7 @@ public partial class DeckView
 			Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);
 			GUI.Box (box, "", UiStyle.PanelStyle);
 			GUI.Label (new Rect (box.x + 24, box.y + 18, bw - 48, 32), familyMode ? "Board finished" : "Deck finished", UiStyle.TitleStyle);
-			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), familyMode ? "Your sets: " + family.Count (family.localPlayer) : "Score: " + score, UiStyle.ValueStyle);
+			GUI.Label (new Rect (box.x + 24, box.y + 56, bw - 48, 32), familyMode ? "Your sets: " + family.Count (family.localId) : "Score: " + score, UiStyle.ValueStyle);
 			//a new season of the online board is not there yet; the offline board starts again with a new seed
 			if (!FamilyOnline && GUI.Button (new Rect (box.x + 24, box.y + 106, bw - 48, 40), "Continue", UiStyle.ActionButtonStyle)) {
 				NewGame ();

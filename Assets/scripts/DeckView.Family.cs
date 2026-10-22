@@ -14,6 +14,7 @@ public partial class DeckView
 	FamilyState pendingFamily; //the board from the database, waiting for LoadBoard
 	Queue<FamilyClaim> remoteClaims = new Queue<FamilyClaim> (); //sets of the others that are not shown yet
 	bool askingName;
+	bool renaming; //the name box is for changing the name of the player who is already playing
 	string nameInput = "";
 	bool loopRunning;
 	bool pollNow; //ask the database at once
@@ -43,12 +44,29 @@ public partial class DeckView
 		PlayerPrefs.SetString (NameKey, playerName);
 		PlayerPrefs.Save ();
 		askingName = false;
+		if (renaming) {
+			renaming = false;
+			family.Rename (playerName); //the new name goes with the next set; the old sets show it too
+			return;
+		}
 		StartCoroutine (ConnectFamily (playerName));
+	}
+
+	//the player wants another name
+	void StartRename ()
+	{
+		nameInput = family.localPlayer;
+		renaming = true;
+		askingName = true;
 	}
 
 	void CancelFamilyName ()
 	{
 		askingName = false;
+		if (renaming) {
+			renaming = false;
+			return;
+		}
 		busy = false;
 		familyMode = false; //the classic table was stored when the family board was chosen
 		UseClassicDifficulty ();
@@ -74,7 +92,7 @@ public partial class DeckView
 			messageUntil = Time.time + 4f;
 			yield break;
 		}
-		pendingFamily = FamilyState.CreateOnline (playerName, seed, claims);
+		pendingFamily = FamilyState.CreateOnline (playerName, backend.uid, seed, claims);
 		message = "";
 		messageUntil = 0f;
 		LoadBoard ();
@@ -127,7 +145,7 @@ public partial class DeckView
 			return; //the same set again, or cards that were replaced already
 		}
 		ClearSelection ();
-		RegisterFound (set, claim.player);
+		RegisterFound (set, claim.uid, claim.player);
 		foreach (int slot in set) {
 			slots [slot].AddFound (FoundColorOf (foundSets.Count - 1));
 		}
@@ -164,10 +182,10 @@ public partial class DeckView
 		float bh = 180;
 		Rect box = new Rect ((width - bw) / 2, (height - bh) / 2, bw, bh);
 		GUI.Box (box, "", UiStyle.PanelStyle);
-		GUI.Label (new Rect (box.x + 24, box.y + 14, bw - 48, 32), "Your name", UiStyle.TitleStyle);
+		GUI.Label (new Rect (box.x + 24, box.y + 14, bw - 48, 32), renaming ? "New name" : "Your name", UiStyle.TitleStyle);
 		nameInput = GUI.TextField (new Rect (box.x + 24, box.y + 58, bw - 48, 36), nameInput, 14);
 		GUI.enabled = FamilyState.CleanName (nameInput) != "";
-		if (GUI.Button (new Rect (box.x + 24, box.y + 108, (bw - 56) / 2, 40), "Play", UiStyle.ActionButtonStyle)) {
+		if (GUI.Button (new Rect (box.x + 24, box.y + 108, (bw - 56) / 2, 40), renaming ? "OK" : "Play", UiStyle.ActionButtonStyle)) {
 			ConfirmFamilyName ();
 		}
 		GUI.enabled = true;

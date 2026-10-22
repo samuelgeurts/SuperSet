@@ -25,15 +25,18 @@ public class SeededRandom
 	}
 }
 
-//one set that a player found on the shared board: who, and the slots of the cards
+//one set that a player found on the shared board: who, and the slots of the cards.
+//A player is known by the uid (the anonymous sign-in); the name is a label that the player can change.
 public class FamilyClaim
 {
-	public string player;
+	public string uid;
+	public string player; //the name of the player at the time
 	public int[] slots;
 	public int n = -1; //number in the log of the database; -1 for a claim that is not in the database
 
-	public FamilyClaim (string player, int[] slots)
+	public FamilyClaim (string uid, string player, int[] slots)
 	{
+		this.uid = uid;
 		this.player = player;
 		this.slots = slots;
 	}
@@ -53,10 +56,12 @@ public class FamilyState
 	public bool online; //the log is in the database (FamilyBackend) and not in PlayerPrefs
 	public int nextN; //online: the number the next claim gets in the database
 	public SeededRandom random;
-	public string localPlayer = "You";
+	public string localPlayer = "You"; //the name of the player on this device
+	public string localId = "You"; //the uid of the player on this device (the offline board uses the name)
 
-	public List<string> players = new List<string> ();
+	public List<string> players = new List<string> (); //the ids of the players, in the order they found their first set
 	public Dictionary<string, int> counts = new Dictionary<string, int> ();
+	public Dictionary<string, string> names = new Dictionary<string, string> (); //the latest name of every player
 	public List<FamilyClaim> log = new List<FamilyClaim> ();
 	public List<string> foundBy = new List<string> (); //finder of every set on the table now, parallel to the found sets of DeckView
 
@@ -72,11 +77,13 @@ public class FamilyState
 	}
 
 	//the board from the database: its seed and the claims so far
-	public static FamilyState CreateOnline (string localPlayer, int seed, List<FamilyClaim> claims)
+	public static FamilyState CreateOnline (string localPlayer, string localId, int seed, List<FamilyClaim> claims)
 	{
 		FamilyState state = new FamilyState ();
 		state.online = true;
 		state.localPlayer = localPlayer;
+		state.localId = localId;
+		state.names [localId] = localPlayer;
 		state.seed = seed;
 		state.random = new SeededRandom (seed);
 		state.log = claims;
@@ -99,34 +106,50 @@ public class FamilyState
 		random = new SeededRandom (seed);
 		players.Clear ();
 		counts.Clear ();
+		names.Clear ();
 		foundBy.Clear ();
 	}
 
-	public void AddPlayer (string name)
+	//a player of a set; the name is the latest one that came with a claim
+	public void AddPlayer (string id, string name)
 	{
-		if (!counts.ContainsKey (name)) {
-			players.Add (name);
-			counts [name] = 0;
+		if (!counts.ContainsKey (id)) {
+			players.Add (id);
+			counts [id] = 0;
 		}
+		names [id] = name;
+	}
+
+	public string Name (string id)
+	{
+		string name;
+		return names.TryGetValue (id, out name) ? name : id;
+	}
+
+	//the player on this device changes their name; sets found before show the new name too
+	public void Rename (string name)
+	{
+		localPlayer = name;
+		names [localId] = name;
 	}
 
 	//the color number of a player: the order in which the players found their first set; a player without a set yet gets the next one
-	public int PlayerIndex (string name)
+	public int PlayerIndex (string id)
 	{
-		int index = players.IndexOf (name);
+		int index = players.IndexOf (id);
 		return index >= 0 ? index : players.Count;
 	}
 
-	public int Count (string name)
+	public int Count (string id)
 	{
 		int count;
-		return counts.TryGetValue (name, out count) ? count : 0;
+		return counts.TryGetValue (id, out count) ? count : 0;
 	}
 
 	//a claim of the offline board is kept on this device
-	public void AddClaim (string player, int[] slots)
+	public void AddClaim (string id, string name, int[] slots)
 	{
-		log.Add (new FamilyClaim (player, slots));
+		log.Add (new FamilyClaim (id, name, slots));
 		if (!online) {
 			PlayerPrefs.SetString (LogKey + season, Format (log));
 			PlayerPrefs.Save ();
@@ -138,7 +161,7 @@ public class FamilyState
 	{
 		List<string> parts = new List<string> ();
 		foreach (FamilyClaim claim in claims) {
-			parts.Add (claim.player + "|" + string.Join (",", System.Array.ConvertAll (claim.slots, s => s.ToString ())));
+			parts.Add (claim.uid + "|" + string.Join (",", System.Array.ConvertAll (claim.slots, s => s.ToString ())));
 		}
 		return string.Join (";", parts);
 	}
@@ -158,7 +181,7 @@ public class FamilyState
 				valid &= int.TryParse (numbers [i], out slots [i]);
 			}
 			if (valid) {
-				claims.Add (new FamilyClaim (halves [0], slots));
+				claims.Add (new FamilyClaim (halves [0], halves [0], slots)); //the offline board has no uid: the name is the id
 			}
 		}
 		return claims;
