@@ -23,6 +23,11 @@ public partial class DeckView
 		get { return familyMode && family != null && family.online; }
 	}
 
+	//the family board is chosen and its table exists (while connecting, family mode is on but there is no table yet)
+	bool FamilyShown {
+		get { return familyMode && family != null; }
+	}
+
 	//the family board needs a name for the player and a connection; without a Firebase key it is the offline board
 	void StartFamilyConnect ()
 	{
@@ -158,11 +163,12 @@ public partial class DeckView
 	{
 		busy = true;
 		FamilyState state = family;
+		int number = state.nextN;
 		FamilyBackend.ClaimResult result = FamilyBackend.ClaimResult.Failed;
-		yield return backend.PostClaim (FirebaseConfig.BoardId, state.nextN, state.localPlayer, found, r => result = r);
+		yield return backend.PostClaim (FirebaseConfig.BoardId, number, state.localPlayer, found, r => result = r);
 		busy = false;
 		if (result == FamilyBackend.ClaimResult.Accepted) {
-			state.nextN++;
+			state.nextN = Mathf.Max (state.nextN, number + 1); //a poll may have seen our own set already
 			AcceptFound (found);
 		} else if (result == FamilyBackend.ClaimResult.Taken) {
 			ShowMessage ("Somebody was faster, updating...");

@@ -36,7 +36,7 @@ public partial class DeckView : MonoBehaviour
 		if (gameOver || busy || askingName) {
 			return;
 		}
-		if (openMenu != TopMenu.None || menuClosedFrame == Time.frameCount) {
+		if (openMenu != TopMenu.None || scoresOpen || menuClosedFrame == Time.frameCount) {
 			CloseMenu (); //a click on a card only closes the open menu
 			return;
 		}
@@ -153,6 +153,9 @@ public partial class DeckView : MonoBehaviour
 	{
 		if (Screen.width != layoutWidth || Screen.height != layoutHeight) {
 			ApplyLayout ();
+		}
+		if (ruleOpen && Time.time - ruleOpenSince > RuleAutoCloseSeconds) {
+			SetRuleOpen (false);
 		}
 	}
 

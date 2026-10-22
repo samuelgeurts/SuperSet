@@ -15,6 +15,7 @@ public partial class DeckView
 		public List<int[]> foundSets;
 		public bool gameOver;
 		public int discardCount; //cards on the discard pile
+		public int discardSets; //sets on the discard pile
 		public int discardTop; //card on top of the discard pile, -1 when it is empty
 		public FamilyState family; //only the family board has one
 	}
@@ -49,6 +50,7 @@ public partial class DeckView
 			foundSets = board.foundSets;
 			gameOver = board.gameOver;
 			discardCount = board.discardCount;
+			discardSets = board.discardSets;
 			discardTopIndex = board.discardTop;
 			family = board.family;
 			for (int slot = 0; slot < boardSize; slot++) {
@@ -74,6 +76,7 @@ public partial class DeckView
 		board.foundSets = foundSets;
 		board.gameOver = gameOver;
 		board.discardCount = discardCount;
+		board.discardSets = discardSets;
 		board.discardTop = discardTopIndex;
 		board.family = family;
 		boards [BoardKey ()] = board;
@@ -115,6 +118,7 @@ public partial class DeckView
 		nextCard = boardSize;
 		foundSets = new List<int[]> ();
 		discardCount = 0;
+		discardSets = 0;
 		discardTopIndex = -1;
 		EnsureSetOnBoard ();
 	}
