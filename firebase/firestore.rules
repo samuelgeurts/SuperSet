@@ -1,9 +1,30 @@
 rules_version = '2';
 
-// Rules of the family board (phase 2). Everybody who is signed in (anonymously) may read the board and write new
-// claims, but a claim can never be changed or deleted afterwards. Phase 3 adds the check that a claim is really a set.
+// Rules of the family board.
+//
+// Everybody who is signed in (anonymously) may read the board and add things, but nothing that is written can be
+// changed or deleted afterwards, except a player's own presence document.
+//
+// A claim (a set that a player found) is only accepted when it is well formed and follows the log:
+//  - the name of the document is the number of the claim with 6 digits (000012) and the number is the next one:
+//    the claim before it exists. A player can only write the next number, so the first claim wins;
+//  - the four slots are different numbers from 0 to 35, in ascending order;
+//  - the claim carries the uid of the player who writes it and a name of 1 to 14 characters.
+// The rules can NOT see the cards on the table, so they do not check that the slots really form a set. Every player's
+// game does that when it replays the log and skips claims that are no set, so the board and the scores stay right.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // the number of a claim as it is written in the name of its document: 12 becomes '000012'
+    function padded(n) {
+      return n < 10 ? '00000' + string(n)
+        : n < 100 ? '0000' + string(n)
+        : n < 1000 ? '000' + string(n)
+        : n < 10000 ? '00' + string(n)
+        : n < 100000 ? '0' + string(n)
+        : string(n);
+    }
+
     match /boards/{boardId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
@@ -11,17 +32,44 @@ service cloud.firestore {
         && request.resource.data.seed is int;
 
       match /claims/{claimId} {
+        function claim() {
+          return request.resource.data;
+        }
+
+        function slot(i) {
+          return int(claim().slots.split(',')[i]);
+        }
+
+        function slotsOk() {
+          return claim().slots.matches('[0-9]{1,2}(,[0-9]{1,2}){3}')
+            && slot(0) >= 0 && slot(0) < slot(1) && slot(1) < slot(2) && slot(2) < slot(3) && slot(3) < 36;
+        }
+
+        function previousExists() {
+          return claim().n == 0
+            || exists(/databases/$(database)/documents/boards/$(boardId)/claims/$(padded(claim().n - 1)));
+        }
+
         allow read: if request.auth != null;
         allow create: if request.auth != null
-          && claimId.matches('[0-9]{6}')
-          && request.resource.data.keys().hasOnly(['n', 'player', 'slots', 'uid'])
-          && request.resource.data.n is int
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.player is string
-          && request.resource.data.player.size() > 0
-          && request.resource.data.player.size() <= 14
-          && request.resource.data.slots is string
-          && request.resource.data.slots.matches('[0-9]{1,2}(,[0-9]{1,2}){3}');
+          && claim().keys().hasOnly(['n', 'player', 'slots', 'uid'])
+          && claim().n is int && claim().n >= 0 && claim().n < 1000000
+          && claimId == padded(claim().n)
+          && previousExists()
+          && claim().uid == request.auth.uid
+          && claim().player is string && claim().player.size() > 0 && claim().player.size() <= 14
+          && claim().slots is string && slotsOk();
+      }
+
+      // who is online: every player writes their own document now and then, with the time of the server
+      match /presence/{uid} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'lastSeen'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 14
+          && request.resource.data.lastSeen == request.time;
+        allow delete: if request.auth != null && request.auth.uid == uid;
       }
     }
   }
