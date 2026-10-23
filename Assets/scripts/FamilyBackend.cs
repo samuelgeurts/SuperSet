@@ -31,6 +31,11 @@ public class FamilyBackend
 	[Serializable] class QueryReply { public QueryItem[] items; }
 	[Serializable] class BoardFields { public IntValue seed; }
 	[Serializable] class BoardDocument { public BoardFields fields; }
+	[Serializable] class PresenceFields { public StringValue name; }
+	[Serializable] class PresenceDocument { public string name; public PresenceFields fields; }
+	[Serializable] class PresenceItem { public PresenceDocument document; }
+	[Serializable] class PresenceReply { public PresenceItem[] items; }
+	[Serializable] class CommitReply { public string commitTime; }
 
 	//one HTTP request; code 0 means no connection
 	IEnumerator Send (string method, string url, string json, bool authorized, Action<long, string> done)
@@ -203,6 +208,75 @@ public class FamilyBackend
 		FamilyClaim claim = new FamilyClaim (claimUid, f.player.stringValue, slots);
 		claim.n = int.Parse (f.n.integerValue);
 		return claim;
+	}
+
+	//Tell the database that this player is here now: the document boards/{boardId}/presence/{uid} gets the name and the time
+	//of the server. The answer is that time (the server's clock, not ours), or null when there is no connection.
+	public IEnumerator Heartbeat (string boardId, string playerName, Action<DateTime?> done)
+	{
+		bool signedIn = false;
+		yield return EnsureSignedIn (ok => signedIn = ok);
+		if (!signedIn) {
+			done (null);
+			yield break;
+		}
+		string document = "projects/" + FirebaseConfig.ProjectId + "/databases/(default)/documents/boards/" + boardId + "/presence/" + uid;
+		string json = "{\"writes\":[{\"update\":{\"name\":\"" + document + "\",\"fields\":{\"name\":{\"stringValue\":\"" + playerName + "\"}}}," +
+		"\"updateTransforms\":[{\"fieldPath\":\"lastSeen\",\"setToServerValue\":\"REQUEST_TIME\"}]}]}";
+		long code = 0;
+		string text = "";
+		yield return Send ("POST", FirebaseConfig.FirestoreUrl + ":commit", json, true, (c, t) => { code = c; text = t; });
+		if (code != 200) {
+			if (code != 0) {
+				Debug.LogWarning ("Family board: presence failed (" + code + ") " + text);
+			}
+			done (null);
+			yield break;
+		}
+		DateTime serverTime;
+		string commitTime = JsonUtility.FromJson<CommitReply> (text).commitTime;
+		if (!DateTime.TryParse (commitTime, System.Globalization.CultureInfo.InvariantCulture,
+			    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out serverTime)) {
+			done (null);
+			yield break;
+		}
+		done (serverTime);
+	}
+
+	//the players who were here in the last OnlineSeconds before serverTime: uid and name; null when there is no connection
+	public const int OnlineSeconds = 150;
+
+	public IEnumerator FetchOnline (string boardId, DateTime serverTime, Action<Dictionary<string, string>> done)
+	{
+		bool signedIn = false;
+		yield return EnsureSignedIn (ok => signedIn = ok);
+		if (!signedIn) {
+			done (null);
+			yield break;
+		}
+		string cutoff = serverTime.AddSeconds (-OnlineSeconds).ToString ("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture);
+		string query = "{\"structuredQuery\":{\"from\":[{\"collectionId\":\"presence\"}]," +
+		"\"where\":{\"fieldFilter\":{\"field\":{\"fieldPath\":\"lastSeen\"},\"op\":\"GREATER_THAN_OR_EQUAL\",\"value\":{\"timestampValue\":\"" + cutoff + "\"}}},\"limit\":100}}";
+		long code = 0;
+		string text = "";
+		yield return Send ("POST", FirebaseConfig.FirestoreUrl + "/boards/" + boardId + ":runQuery", query, true, (c, t) => { code = c; text = t; });
+		if (code != 200) {
+			if (code != 0) {
+				Debug.LogWarning ("Family board: loading who is online failed (" + code + ") " + text);
+			}
+			done (null);
+			yield break;
+		}
+		Dictionary<string, string> online = new Dictionary<string, string> ();
+		PresenceReply reply = JsonUtility.FromJson<PresenceReply> ("{\"items\":" + text + "}");
+		foreach (PresenceItem item in reply.items) {
+			if (item.document == null || string.IsNullOrEmpty (item.document.name) || item.document.fields == null || item.document.fields.name == null) {
+				continue; //an empty answer holds only the time of the query
+			}
+			string playerUid = item.document.name.Substring (item.document.name.LastIndexOf ('/') + 1);
+			online [playerUid] = item.document.fields.name.stringValue;
+		}
+		done (online);
 	}
 
 	//write claim number n; Taken means somebody else wrote number n first

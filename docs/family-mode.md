@@ -29,7 +29,7 @@ Een soort open multiplayer die niet snel gaat: het bord is zo moeilijk dat je er
 - **Identiteit:** zelfgekozen bijnaam met anonieme login.
 
 ## Bewust kiezen (open)
-- **Controle op de server (fase 3):** Firestore security rules (gratis Spark-plan; de setregel en een create-only document per gebruikte kaart, deckvolgorde in het bordbestand) of een Cloud Function (Blaze, betaalkaart nodig, omdat het Spark-plan geen servercode toelaat). Besluit bij de start van fase 3; het bord gaat pas openbaar na die fase.
+- **Strikte controle op de server (fase 3, vervolg):** zie "Controle op de server" hieronder. De gratis regels controleren alleen de vorm; echt nagaan dat vier kaarten een set vormen kan alleen met een Cloud Function (Blaze, betaalkaart).
 - **Wat als het bord klaar of vast is:** een nieuw bord starten ("seizoen 2") en het oude bewaren als trofee (fase 4).
 
 ## Verhouding tot de rest
@@ -54,11 +54,34 @@ Eenmalig in de [Firebase-console](https://console.firebase.google.com/project/su
 
 Datamodel:
 - `boards/main`: het bord (`seed`). De eerste speler maakt het aan.
+- `boards/main/presence/{uid}`: wie online is (`name`, `lastSeen`), zie hieronder.
 - `boards/main/claims/000123`: het logboek, één document per gevonden set (`n`, `player`, `slots` als "7,11,21,31", `uid`). Het nummer in de naam is een slot: een speler kan alleen het eerstvolgende nummer schrijven. Heeft iemand anders dat al gedaan, dan geeft Firestore "bestaat al" (HTTP 409), en moet de speler eerst het bord verversen. Zo wint de eerste claim.
-- Het spel vraagt elke 8 seconden alleen de nieuwe claims op (`n` groter dan de laatste die het kent) en laat die van anderen één voor één zien.
+- Het spel vraagt elke 30 seconden alleen de nieuwe claims op (`n` groter dan de laatste die het kent) en laat die van anderen één voor één zien.
 
 Spelers worden herkend aan hun `uid`; de naam is een label dat je kunt wijzigen (Change name in het modusmenu) en dat bij de volgende set van die speler zichtbaar wordt voor de anderen. Twee spelers met dezelfde naam blijven dus gescheiden.
 
 Bekende beperkingen: het naamvak werkt op een telefoon in de browser mogelijk niet goed (IMGUI-toetsenbord), en een vol bord start nog geen nieuw seizoen (#51).
 
 Testen zonder echte Firebase: de Firebase-emulator (`firebase emulators:start --only auth,firestore --project superset-75145`) en in de editor de omgevingsvariabele `SUPERSET_FIREBASE_EMULATOR=127.0.0.1`. Daarmee zijn de aanmelding, het aanmaken van het bord, een claim van een tweede speler, het tonen daarvan, een eigen claim en een dubbele claim (409) getest, ook met de regels uit `firebase/firestore.rules`.
+
+## Controle op de server (fase 3, #50)
+Gekozen: de gratis Firestore-regels ([firebase/firestore.rules](../firebase/firestore.rules), Spark-plan, geen betaalkaart). Ze weigeren een claim die niet klopt:
+- de naam van het document is het nummer met 6 cijfers en het vorige nummer bestaat (er zijn geen gaten, en wie het eerst schrijft wint);
+- de vier slots zijn verschillende getallen van 0 tot 35, oplopend;
+- de claim heeft het uid van wie schrijft en een naam van 1 tot 14 tekens;
+- een geschreven claim kan niet meer worden gewijzigd of verwijderd.
+
+**Wat de regels niet kunnen:** controleren dat de vier kaarten echt een set vormen. De regels zien de kaarten op tafel niet: het bord wordt uit de seed en het logboek opgebouwd, met een willekeurige (maar vaste) reeks wissels, en dat kan een regel niet narekenen. Het spel van elke speler doet die controle wel: bij het afspelen van het logboek wordt een claim die geen set is, of kaarten gebruikt die al weg zijn, overgeslagen. Het bord en de scores van eerlijke spelers blijven dus kloppen; een vervalste claim kost alleen een nummer.
+
+**Beperking:** iedereen met de sleutel kan anoniem een account maken, dus een kwaadwillende kan het dagelijkse gratis aantal schrijfacties opmaken door veel claims te sturen. Daartegen helpt alleen Firebase App Check (nog niet ingericht) of een server die claims controleert. Een Cloud Function (Blaze) zou ook de setcontrole zelf kunnen doen; dat is de stap als het bord echt druk wordt.
+
+Publiceren van de regels (nodig na elke wijziging): `firebase deploy --only firestore:rules` in de map van het project (`firebase.json` en `.firebaserc` staan erin).
+
+## Wie is online (#58)
+- Elke minuut schrijft het spel (alleen als het venster actief is) het document `boards/main/presence/{uid}` met de naam en de tijd van de server. Online is wie in de laatste 150 seconden van zich liet horen. De lijst wordt daarna opgehaald met één vraag op `lastSeen`.
+- Spelers zonder set maar wel online staan ook in de lijst. Een groen bolletje bij de online spelers, en in de strook "N online   Total N".
+- Een speler schrijft alleen zijn eigen document, met de tijd van de server (de regels dwingen dat af).
+- **Kosten op het gratis plan:** 20.000 schrijfacties en 50.000 leesacties per dag voor het hele project. Het spel vraagt nu elke 30 seconden om nieuwe sets (één leesactie per vraag, dus ongeveer 2.900 per dag per speler die de hele dag open heeft) en elke minuut om de online lijst (een leesactie per online speler). Dat past voor een kleine groep.
+
+## Weggewisselde kaarten (#59)
+Ligt er na het uitdelen geen set op tafel, dan wisselt het spel kaarten van tafel voor de volgende van de stapel tot er een set ligt. De weggewisselde kaarten gaan nu **onderop de trekstapel** en gaan dus niet meer verloren (het zijn er ongeveer 107 op de 300 nieuwe tafels van het familiebord-formaat). Er is een grens van 300 wissels; lukt het daarmee niet, dan is het bord af. De wissels volgen dezelfde vaste reeks, dus het opnieuw opbouwen uit het logboek blijft kloppen. Een oudere versie van de app bouwt een bord waar gewisseld moest worden anders op; speel dus met één versie per bord.
