@@ -219,12 +219,20 @@ public partial class DeckView
 	Vector2 scoresScroll;
 	GUIStyle scoreRightStyle;
 
-	//the players of the family board, most sets first; the player of this device is in the list before the first set
+	static readonly Color OnlineColor = new Color (0.30f, 0.85f, 0.45f);
+
+	//the players of the family board, most sets first; the player of this device and the players who are online are in
+	//the list before they have a set
 	List<string> FamilyPlayersByCount ()
 	{
 		List<string> ids = new List<string> (family.players);
 		if (!ids.Contains (family.localId)) {
 			ids.Add (family.localId);
+		}
+		foreach (string online in family.onlineNames.Keys) {
+			if (!ids.Contains (online)) {
+				ids.Add (online);
+			}
 		}
 		ids.Sort ((x, y) => {
 			int byCount = family.Count (y).CompareTo (family.Count (x));
@@ -247,12 +255,16 @@ public partial class DeckView
 		float y = BarHeight + 4 + (ruleOpen ? RuleHeight + 4 : 0) + MessageHeight;
 		List<string> ids = FamilyPlayersByCount ();
 		int total = 0;
+		int onlineCount = 0;
 		foreach (string id in ids) {
 			total += family.Count (id);
+			if (family.IsOnline (id)) {
+				onlineCount++;
+			}
 		}
 
-		//right: the total of all players
-		string totalText = "Total " + total;
+		//right: how many are online and the total of all players
+		string totalText = onlineCount + " online   Total " + total;
 		float totalWidth = UiStyle.LabelStyle.CalcSize (new GUIContent (totalText)).x + 22;
 		Rect totalRect = new Rect (width - 8 - totalWidth, y, totalWidth, PlayersHeight);
 		if (GUI.Button (totalRect, "", GUIStyle.none)) {
@@ -273,7 +285,11 @@ public partial class DeckView
 			}
 			DrawSquare (new Rect (x, y + 6, 10, 10), UiStyle.FoundColor (family.PlayerIndex (ids [i])));
 			GUI.Label (new Rect (x + 14, y + 2, textWidth + 4, PlayersHeight - 2), text, UiStyle.LabelStyle);
-			x += 14 + textWidth + 14;
+			x += 14 + textWidth + 6;
+			if (family.IsOnline (ids [i])) {
+				DrawSquare (new Rect (x, y + 8, 6, 6), OnlineColor); //a green dot: this player is online
+			}
+			x += 6 + 12;
 		}
 
 		if (scoresOpen) {
@@ -308,7 +324,10 @@ public partial class DeckView
 			float ry = i * rowHeight;
 			string name = family.Name (ids [i]) + (ids [i] == family.localId ? " (you)" : "");
 			DrawSquare (new Rect (0, ry + 5, 10, 10), UiStyle.FoundColor (family.PlayerIndex (ids [i])));
-			GUI.Label (new Rect (16, ry + 1, content.width - 16 - 40, rowHeight), name, UiStyle.LabelStyle);
+			GUI.Label (new Rect (16, ry + 1, content.width - 16 - 54, rowHeight), name, UiStyle.LabelStyle);
+			if (family.IsOnline (ids [i])) {
+				DrawSquare (new Rect (content.width - 52, ry + 7, 6, 6), OnlineColor);
+			}
 			GUI.Label (new Rect (content.width - 40, ry + 1, 40, rowHeight), family.Count (ids [i]).ToString (), scoreRightStyle);
 		}
 		GUI.EndScrollView ();

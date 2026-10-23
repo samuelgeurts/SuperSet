@@ -62,6 +62,7 @@ public class FamilyState
 	public List<string> players = new List<string> (); //the ids of the players, in the order they found their first set
 	public Dictionary<string, int> counts = new Dictionary<string, int> ();
 	public Dictionary<string, string> names = new Dictionary<string, string> (); //the latest name of every player
+	public Dictionary<string, string> onlineNames = new Dictionary<string, string> (); //online now: uid and name (also players without a set)
 	public List<FamilyClaim> log = new List<FamilyClaim> ();
 	public List<string> foundBy = new List<string> (); //finder of every set on the table now, parallel to the found sets of DeckView
 
@@ -123,7 +124,16 @@ public class FamilyState
 	public string Name (string id)
 	{
 		string name;
-		return names.TryGetValue (id, out name) ? name : id;
+		if (names.TryGetValue (id, out name)) {
+			return name;
+		}
+		return onlineNames.TryGetValue (id, out name) ? name : id;
+	}
+
+	//the player on this device is online as long as the family board is open
+	public bool IsOnline (string id)
+	{
+		return id == localId || onlineNames.ContainsKey (id);
 	}
 
 	//the player on this device changes their name; sets found before show the new name too

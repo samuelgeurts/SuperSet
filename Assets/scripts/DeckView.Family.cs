@@ -8,7 +8,8 @@ public partial class DeckView
 {
 
 	const string NameKey = "FamilyName";
-	const float PollSeconds = 8f; //how often the database is asked for new sets of the others
+	const float PollSeconds = 30f; //how often the database is asked for new sets of the others (every ask costs one read)
+	const float PresenceSeconds = 60f; //how often this player says they are here and the list of online players is loaded
 
 	FamilyBackend backend = new FamilyBackend ();
 	FamilyState pendingFamily; //the board from the database, waiting for LoadBoard
@@ -116,7 +117,15 @@ public partial class DeckView
 	{
 		loopRunning = true;
 		float next = 0f;
+		float nextPresence = 0f;
 		while (FamilyOnline) {
+			if (Time.time >= nextPresence) {
+				nextPresence = Time.time + PresenceSeconds;
+				yield return RefreshPresence ();
+				if (!FamilyOnline) {
+					break;
+				}
+			}
 			if (Time.time >= next || pollNow) {
 				pollNow = false;
 				next = Time.time + PollSeconds;
@@ -138,6 +147,25 @@ public partial class DeckView
 			yield return null;
 		}
 		loopRunning = false;
+	}
+
+	//say that this player is here, then load who else is here; nothing is written while the game is in the background
+	IEnumerator RefreshPresence ()
+	{
+		if (!Application.isFocused && !Application.isBatchMode) {
+			yield break;
+		}
+		FamilyState state = family;
+		System.DateTime? serverTime = null;
+		yield return backend.Heartbeat (FirebaseConfig.BoardId, state.localPlayer, t => serverTime = t);
+		if (serverTime == null) {
+			yield break;
+		}
+		Dictionary<string, string> online = null;
+		yield return backend.FetchOnline (FirebaseConfig.BoardId, serverTime.Value, o => online = o);
+		if (online != null && state == family) {
+			state.onlineNames = online;
+		}
 	}
 
 	//a set of another player: it gets their color and is shown big for a moment, like a set of our own
