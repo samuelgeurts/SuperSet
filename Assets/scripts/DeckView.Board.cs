@@ -144,6 +144,8 @@ public partial class DeckView
 		}
 	}
 
+	const int MaxSwaps = 300; //most cards that are swapped to get a set on the table
+
 	//find the sets on the table; while there is none, swap random cards for new ones
 	void EnsureSetOnBoard ()
 	{
@@ -152,14 +154,19 @@ public partial class DeckView
 			family.foundBy.Clear ();
 		}
 		FindSets ();
-		while (boardSets.Count == 0 && nextCard < deckOrder.Count) {
+		//A card that is swapped away is not lost: it goes to the bottom of the draw pile, and will be dealt later.
+		//The number of swaps is limited, so a table where no set can come never keeps the game busy.
+		int swaps = 0;
+		while (boardSets.Count == 0 && nextCard < deckOrder.Count && swaps < MaxSwaps) {
 			int slot = familyMode ? family.random.Next (boardSize) : Random.Range (0, boardSize);
 			if (slotActive [slot]) {
+				deckOrder.Add (shownCardIndex [slot]);
 				ChangeCard (slot);
 				FindSets ();
+				swaps++;
 			}
 		}
-		gameOver = boardSets.Count == 0; //deck empty and no set left on the table
+		gameOver = boardSets.Count == 0; //no set left on the table, and none came after the swaps
 	}
 
 	//look up all sets on the table and publish the number that is not found yet for the UI text
