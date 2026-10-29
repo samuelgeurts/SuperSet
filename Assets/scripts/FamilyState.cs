@@ -78,13 +78,13 @@ public class FamilyState
 	}
 
 	//the board from the database: its seed and the claims so far
-	public static FamilyState CreateOnline (string localPlayer, string localId, int seed, List<FamilyClaim> claims)
+	public static FamilyState CreateOnline (string localPlayer, int seed, List<FamilyClaim> claims)
 	{
 		FamilyState state = new FamilyState ();
 		state.online = true;
 		state.localPlayer = localPlayer;
-		state.localId = localId;
-		state.names [localId] = localPlayer;
+		state.localId = KeyOf (localPlayer);
+		state.names [state.localId] = localPlayer;
 		state.seed = seed;
 		state.random = new SeededRandom (seed);
 		state.log = claims;
@@ -92,6 +92,19 @@ public class FamilyState
 			state.nextN = Mathf.Max (state.nextN, claim.n + 1);
 		}
 		return state;
+	}
+
+	//Online, a player is known by the name (not case sensitive), so the same name on a phone and on a computer is one player.
+	//The uid of the sign-in only goes to the database.
+	public static string KeyOf (string name)
+	{
+		return name.Trim ().ToLowerInvariant ();
+	}
+
+	//the id of the player of a claim: the key of the name online, the name itself on the offline board
+	public string IdOf (FamilyClaim claim)
+	{
+		return online ? KeyOf (claim.player) : claim.uid;
 	}
 
 	//the next season: a new seed and an empty log
@@ -140,6 +153,9 @@ public class FamilyState
 	public void Rename (string name)
 	{
 		localPlayer = name;
+		if (online) {
+			localId = KeyOf (name); //sets found under the old name stay with that name
+		}
 		names [localId] = name;
 	}
 

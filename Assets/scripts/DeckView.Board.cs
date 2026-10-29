@@ -271,7 +271,7 @@ public partial class DeckView
 			if (!ClaimIsValid (slotList)) {
 				continue;
 			}
-			RegisterFound (slotList, claim.uid, claim.player);
+			RegisterFound (slotList, family.IdOf (claim), claim.player);
 			if (numberofSets <= 0) {
 				ReplaceFoundCardsData ();
 			}
