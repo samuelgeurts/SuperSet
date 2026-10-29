@@ -98,7 +98,7 @@ public partial class DeckView
 			messageUntil = Time.time + 4f;
 			yield break;
 		}
-		pendingFamily = FamilyState.CreateOnline (playerName, backend.uid, seed, claims);
+		pendingFamily = FamilyState.CreateOnline (playerName, seed, claims);
 		message = "";
 		messageUntil = 0f;
 		LoadBoard ();
@@ -164,7 +164,11 @@ public partial class DeckView
 		Dictionary<string, string> online = null;
 		yield return backend.FetchOnline (FirebaseConfig.BoardId, serverTime.Value, o => online = o);
 		if (online != null && state == family) {
-			state.onlineNames = online;
+			Dictionary<string, string> byName = new Dictionary<string, string> (); //one entry per name, whatever the device
+			foreach (string name in online.Values) {
+				byName [FamilyState.KeyOf (name)] = name;
+			}
+			state.onlineNames = byName;
 		}
 	}
 
@@ -178,7 +182,7 @@ public partial class DeckView
 			return; //the same set again, or cards that were replaced already
 		}
 		ClearSelection ();
-		RegisterFound (set, claim.uid, claim.player);
+		RegisterFound (set, family.IdOf (claim), claim.player);
 		foreach (int slot in set) {
 			slots [slot].AddFound (FoundColorOf (foundSets.Count - 1));
 		}
